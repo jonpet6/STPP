@@ -24,28 +24,6 @@ class Validator:
 				raise ValidationError("Has no value")
 
 
-class StringValidator(Validator):
-	def __init__(self, allow_none: bool = False, length_min: int = None, length_max: int = None):
-		super().__init__(allow_none)
-		self._length_min = length_min
-		self._length_max = length_max
-
-	def validate(self, obj: any = None) -> None:
-		# Raises ve if none
-		super().validate(obj)
-		# Object is not none
-		errors = []
-		if type(obj) is not str:
-			errors.append("Not a string")
-		else:
-			if self._length_min is not None and len(obj) < self._length_min:
-				errors.append(f"Shorter than {self._length_min}")
-			if self._length_max is not None and len(obj) > self._length_max:
-				errors.append(f"Longer than {self._length_max}")
-		if errors:
-			raise ValidationError(errors)
-
-
 class IntValidator(Validator):
 	def __init__(self, allow_none: bool = False, minimum: int = None, maximum: int = None):
 		super().__init__(allow_none)
@@ -67,6 +45,28 @@ class IntValidator(Validator):
 				errors.append(f"Smaller than {self._minimum}")
 			if self._maximum is not None and value > self._maximum:
 				errors.append(f"Larger than {self._maximum}")
+		if errors:
+			raise ValidationError(errors)
+
+
+class StringValidator(Validator):
+	def __init__(self, allow_none: bool = False, length_min: int = None, length_max: int = None):
+		super().__init__(allow_none)
+		self._length_min = length_min
+		self._length_max = length_max
+
+	def validate(self, obj: any = None) -> None:
+		# Raises ve if none
+		super().validate(obj)
+		# Object is not none
+		errors = []
+		if type(obj) is not str:
+			errors.append("Not a string")
+		else:
+			if self._length_min is not None and len(obj) < self._length_min:
+				errors.append(f"Shorter than {self._length_min}")
+			if self._length_max is not None and len(obj) > self._length_max:
+				errors.append(f"Longer than {self._length_max}")
 		if errors:
 			raise ValidationError(errors)
 
