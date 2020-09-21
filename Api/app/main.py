@@ -1,20 +1,25 @@
-import sys
-import click
-import getpass
 import datetime
-import pathlib
+import getpass
+import sys
 
 import argon2
-
+import click
 import flask
 import flask.json
-import routes.users
-
+import isodate
 import sqlalchemy.exc
 
+import controllers.users
+import controllers.login
+
+import routes.login
+import routes.users
+
+import utils.jwt
+from core.auth import Auth
 from data.db import Database
-from utils import jwt
-from utils.config import Config
+from core.config import Config
+
 
 # Ensures ISO-8601 datetime in json
 class AppJsonEncoder(flask.json.JSONEncoder):
@@ -27,39 +32,44 @@ class AppJsonEncoder(flask.json.JSONEncoder):
 
 def main():
 	cfg = Config(sys.path[0], "config")
-	cfg_strict_requests = cfg.get("app", "strict_requests", bool, True)
-	cfg_api_port = cfg.get("app", "api_port", int, None)
-	cfg_api_debug = cfg.get("app", "api_debug", bool, None)
-	cfg_tokens_lifetime = datetime.time(
-		hour=cfg.get("tokens", "lifetime_hours", int, 1)
-	)
-	cfg_tokens_public_key = cfg.get("tokens", "public_key", pathlib.Path, pathlib.Path("public.txt"))
-	cfg_tokens_private_key = cfg.get("tokens", "private_key.txt", pathlib.Path, pathlib.Path("private.txt"))
-	cfg_tokens_private_key_pass = cfg.get("tokens", "private_key_password", str, None)
 
-	db = connect_db(cfg)
-	pw = argon2.PasswordHasher()
-	tk_gen = jwt.Generator(cfg_tokens_private_key, cfg_tokens_private_key_pass)
-	tk_ver = jwt.Verifier(cfg_tokens_public_key, cfg_tokens_lifetime)
+	private_key_pass = getpass.getpass(prompt=f"Private key password: ") if cfg[cfg.TOKENS_PRIVATE_KEY_PROTECETD] else None
+	private_key = utils.jwt.read_private_key(cfg[cfg.TOKENS_PRIVATE_KEY_PATH], private_key_pass)
+	public_key = utils.jwt.read_public_key(cfg[cfg.TOKENS_PUBLIC_KEY_PATH])
+	tokens_lifetime = isodate.parse_duration(cfg[cfg.TOKENS_LIFETIME])
+
+	password_hasher = argon2.PasswordHasher()
+	database = connect_db(cfg)
+	auth = Auth(database, public_key, tokens_lifetime)
+
+	c_users = controllers.users.Users(database, auth, password_hasher, cfg[cfg.APP_STRICT_REQUESTS])
+	c_login = controllers.login.Login(database, private_key, password_hasher, cfg[cfg.APP_STRICT_REQUESTS])
 
 	api_path = "/api"
 
 	app = flask.Flask(__name__)
 	app.json_encoder = AppJsonEncoder
 
-	app.register_blueprint(routes.users.init(db, pw, cfg_strict_requests), url_prefix=api_path)
+	app.register_blueprint(routes.users.init(c_users), url_prefix=api_path)
+	app.register_blueprint(routes.login.init(c_login), url_prefix=api_path)
 
-	app.run(port=cfg_api_port, debug=cfg_api_debug)
+	app.run(port=cfg[cfg.APP_PORT], debug=cfg[cfg.APP_DEBUG])
 
 
 def connect_db(cfg: Config) -> Database:
-	cfg_section = "database"
-	cfg_settings = ["host", "port", "name", "schema", "user"]
+	# Get cfg
+	cfg_args = {
+		"host": cfg[cfg.DB_HOST],
+		"port": cfg[cfg.DB_PORT],
+		"name": cfg[cfg.DB_NAME],
+		"schema": cfg[cfg.DB_SCHEMA],
+		"user": cfg[cfg.DB_USER]
+	}
+	# Fill in missing cfg values from user input
 	db_args = {}
-	# Init db_args, whether from config or by hand
-	for key in cfg_settings:
-		cfg_value = cfg.get(cfg_section, key, str, None)
-		db_args[key] = cfg_value if cfg_value is not None else input(f"{key}: ")
+	for key in cfg_args:
+		db_args[key] = cfg_args[key] if cfg_args[key] is not None else input(f"Database {key}: ")
+	# Try connection
 	while True:
 		try:
 			db = Database(
@@ -67,21 +77,21 @@ def connect_db(cfg: Config) -> Database:
 				db_args["name"], db_args["schema"],
 				db_args["user"], getpass.getpass(prompt=f"{db_args['user']} password: ")
 			)
-			# Connection successful, save cfg
-			for key in cfg_settings:
-				if cfg.get(cfg_section, key, str, None) is None:
-					cfg.set(cfg_section, key, db_args[key])
+			# Success, save missing cfg values
+			for key in cfg_args:
+				if cfg_args[key] is None:
+					cfg_args[key] = db_args[key]
 			return db
 		except sqlalchemy.exc.OperationalError as sqlerr:
-			print(f"Failed to connect to database: {sqlerr}")
-			if not click.confirm("Try again?"):
+			print(f"Failed to connect to the database: {sqlerr}")
+			if click.confirm("Try again?"):
+				if click.confirm("Edit database info?"):
+					for key in db_args:
+						hint = "" if cfg_args[key] is None else f"({cfg_args[key]})"
+						db_args[key] = input(f"{key}{hint}: ")
+			else:
 				break
-			elif click.confirm("Edit database info?"):
-				for key in cfg_settings:
-					cfg_value = cfg.get(cfg_section, key, str, None)
-					hint = "" if cfg_value is None else f"({cfg_value})"
-					db_args[key] = input(f"{key}{hint}: ")
-	raise Exception("Failed to connect to database.")
+	raise Exception("Failed to connect to the database.")
 
 
 if __name__ == "__main__":
