@@ -1,77 +1,124 @@
 import typing
+if typing.TYPE_CHECKING:
+	TH_ERRORS = typing.Union[str, dict, typing.List[typing.Union[str, dict]]]
 
+import traceback
 import flask
 from http import HTTPStatus
 
 
+# region Codeless core responses
 class Response:
-	def __init__(self, data: dict, code: int):
-		self.data = data
+	def __init__(self, code: int):
 		self.code = code
 
+	def to_flask(self) -> flask.Response:
+		raise NotImplementedError
+
+
+class _Empty(Response):
+	def __init__(self, code: int):
+		super().__init__(code)
+
 	def to_flask(self):
-		return self.data, self.code
+		return "", self.code
 
-	@staticmethod
-	def _empty(code: int) -> 'Response':
-		return Response({}, code)
 
-	@staticmethod
-	def _object(obj: typing.Any, code: int) -> 'Response':
-		return Response(flask.jsonify(obj), code)
+class _Object(Response):
+	def __init__(self, code: int, obj: typing.Any):
+		super().__init__(code)
+		self.object = obj
 
-	@staticmethod
-	def _errors(errors: typing.Any, code: int) -> 'Response':
-		if type(errors) is not list:
-			errors = [errors]
-		return Response(flask.jsonify({"errors": errors}), code)
+	def to_flask(self):
+		return flask.jsonify(self.object), self.code
 
-	@staticmethod
-	def bad_request(errors: typing.Any) -> 'Response':
-		return Response._errors(errors, HTTPStatus.BAD_REQUEST)
 
-	@staticmethod
-	def bad_parameters(errors: typing.Any) -> 'Response':
-		return Response._errors(errors, HTTPStatus.UNPROCESSABLE_ENTITY)
+class _Errors(Response):
+	def __init__(self, code: int, errors: 'TH_ERRORS'):
+		super().__init__(code)
+		self.errors = errors if type(errors) is list else [errors]
 
-	@staticmethod
-	def not_found(errors: typing.Any) -> 'Response':
-		return Response._errors(errors, HTTPStatus.NOT_FOUND)
+	def to_flask(self):
+		return flask.jsonify({"errors": self.errors}), self.code
+# endregion Core Responses
 
-	@staticmethod
-	def conflict(errors: typing.Any) -> 'Response':
-		return Response._errors(errors, HTTPStatus.CONFLICT)
 
-	@staticmethod
-	def not_implemented() -> 'Response':
-		return Response._errors("Api method not implemented", HTTPStatus.METHOD_NOT_ALLOWED)
+# region 1xx Informational
+# endregion 1xx Informational
 
-	@staticmethod
-	def internal_errors(errors: typing.Any) -> 'Response':
-		return Response._errors(errors, HTTPStatus.INTERNAL_SERVER_ERROR)
 
-	@staticmethod
-	def internal_exception(exception: Exception, message: str) -> 'Response':
-		# TODO log
+# region 2xx Success
+class OK(_Object):
+	def __init__(self, obj: typing.Any):
+		super().__init__(HTTPStatus.OK, obj)
+
+
+class OKEmpty(_Empty):
+	def __init__(self):
+		super().__init__(HTTPStatus.NO_CONTENT)
+# endregion 2xx Success
+
+
+# region 3xx Redirection
+# endregion 3xx Redirection
+
+
+# region 4xx Client error
+class Unauthorized(_Errors):
+	def __init__(self, errors: 'TH_ERRORS'):
+		super().__init__(HTTPStatus.UNAUTHORIZED, errors)
+
+
+class Forbidden(_Errors):
+	def __init__(self, errors: 'TH_ERRORS'):
+		super().__init__(HTTPStatus.FORBIDDEN, errors)
+
+
+class BadRequest(_Errors):
+	def __init__(self, errors: 'TH_ERRORS'):
+		super().__init__(HTTPStatus.BAD_REQUEST, errors)
+
+
+class Unprocessable(_Errors):
+	def __init__(self, errors: 'TH_ERRORS'):
+		super().__init__(HTTPStatus.UNPROCESSABLE_ENTITY, errors)
+
+
+class NotFound(_Errors):
+	def __init__(self, errors: 'TH_ERRORS'):
+		super().__init__(HTTPStatus.NOT_FOUND, errors)
+
+
+class Conflict(_Errors):
+	def __init__(self, errors: 'TH_ERRORS'):
+		super().__init__(HTTPStatus.CONFLICT, errors)
+
+
+class MethodNotAllowed(_Errors):
+	def __init__(self, errors: 'TH_ERRORS'):
+		super().__init__(HTTPStatus.METHOD_NOT_ALLOWED, errors)
+# endregion 4xx Client error
+
+
+# region 5xx Server error
+class InternalError(_Errors):
+	def __init__(self, errors: 'TH_ERRORS'):
+		super().__init__(HTTPStatus.INTERNAL_SERVER_ERROR, errors)
+
+
+class InternalException(_Errors):
+	def __init__(self, exception: Exception, errors: 'TH_ERRORS'):
+		# TODO log exception
+		print("===================================================")
+		print(type(exception))
 		print(exception)
-		return Response.internal_errors(message)
+		traceback.print_stack()
+		print("===================================================")
+		super().__init__(HTTPStatus.INTERNAL_SERVER_ERROR, errors)
 
-	@staticmethod
-	def database_exception(exception: Exception) -> 'Response':
-		return Response.internal_exception(exception, "Database error")
 
-	@staticmethod
-	def ok_empty() -> 'Response':
-		return Response._empty(HTTPStatus.NO_CONTENT)
+class DatabaseException(InternalException):
+	def __init__(self, exception: Exception):
+		super().__init__(exception, {"Database": ["error"]})
 
-	@staticmethod
-	def unauthorized() -> 'Response':
-		return Response._empty(HTTPStatus.UNAUTHORIZED) #TODO REDIRECT?
-
-	@staticmethod
-	def forbidden(errors: typing.Any) -> 'Response':
-		return Response._errors(errors, HTTPStatus.FORBIDDEN)
-
-	@staticmethod
-	def ok(obj: typing.Any) -> 'Response':
-		return Response._object(obj, HTTPStatus.OK)
+# endregion 5xx Server error

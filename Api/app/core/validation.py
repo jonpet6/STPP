@@ -1,10 +1,10 @@
 import typing
+if typing.TYPE_CHECKING:
+	from core.responses import TH_ERRORS
 
 
 class ValidationError(Exception):
-	errors: list
-
-	def __init__(self, errors: typing.Any):
+	def __init__(self, errors: 'TH_ERRORS'):
 		super().__init__()
 		self.errors = errors if type(errors) is list else [errors]
 
@@ -72,7 +72,7 @@ class JsonValidator(Validator):
 		super().__init__(allow_none)
 		self._allow_missing = allow_missing
 		self._allow_all_missing = allow_all_missing
-		self._allow_undefined= allow_undefined
+		self._allow_undefined = allow_undefined
 		self._keys_validators = keys_validators
 
 	def validate(self, obj: any) -> None:
@@ -81,7 +81,7 @@ class JsonValidator(Validator):
 			if self._allow_none:
 				return
 			else:
-				errors.append("Is none")
+				errors.append("Missing or corrupt")
 		else:
 			if type(obj) is not dict:
 				errors.append("Not a dict")

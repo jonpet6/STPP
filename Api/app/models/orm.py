@@ -39,12 +39,16 @@ class UsersBans(Base):
 	date_created: DateTime.python_type = Column(DateTime, nullable=False, server_default=FetchedValue())
 	reason: Text.python_type = Column(Text, nullable=False)
 
+	REASON_LENGTH_MIN = 1
+	REASON_LENGTH_MAX = 255
+
 
 @dataclass
 class Rooms(Base):
 	__tablename__ = "rooms"
 
 	id: Integer.python_type = Column(Integer, primary_key=True)
+	creator_id: Integer.python_type = Column(ForeignKey(Users.id), primary_key=True)
 	date_created: DateTime.python_type = Column(DateTime, nullable=False, server_default=FetchedValue())
 	title: Text.python_type = Column(Text, nullable=False)
 

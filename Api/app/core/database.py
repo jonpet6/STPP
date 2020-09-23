@@ -1,5 +1,7 @@
 import typing
 if typing.TYPE_CHECKING:
+	# noinspection PyProtectedMember
+	from sqlalchemy.engine import Engine as th_Engine
 	from sqlalchemy.orm.session import sessionmaker as th_sessionmaker
 	from sqlalchemy.orm.session import Session as th_Session
 
@@ -12,6 +14,8 @@ _DRIVER = "postgres+psycopg2"
 
 
 class Database:
+	_engine: 'th_Engine' = None
+	_sessionmaker: 'th_sessionmaker' = None
 	_session: 'th_Session' = None
 
 	def __init__(self, host: str, port: str, dbname: str, schema: str, user: str, password: str) -> None:
@@ -20,7 +24,7 @@ class Database:
 		-------
 		sqlalchemy.exc.OperationalError
 		"""
-		engine = sqlalchemy.create_engine(
+		self._engine = sqlalchemy.create_engine(
 			sqlalchemy.engine.url.URL(
 				_DRIVER, user, password, host, port, dbname
 			),
@@ -28,29 +32,32 @@ class Database:
 				"options": f"-csearch_path={schema}"
 			},
 		)
-		engine.connect()
-		session_maker = sqlalchemy.orm.sessionmaker(bind=engine)
-		self._session = session_maker()
+		# Test connection
+		self._engine.connect()
+		self._session_maker = sqlalchemy.orm.sessionmaker(bind=self._engine)
+		self._session = self._session_maker(autocommit=True)
 
 	def __del__(self):
-		if self._session is not None:
-			self._session.close()
+		if self._engine is not None:
+			self._engine.dispose()
 
 	@property
 	@contextlib.contextmanager
 	def scope(self) -> 'th_Session':
 		"""
-		Provides the db session, if connected
-		Automatically commits, or rolls back on error
+		A scope for a transaction
+		Automatically commits and closes, rolls back on failure
 
 		Raises
 		-------
-		AttributeError
 		sqlalchemy.exc.SQLAlchemyError
 		"""
+		print("scope begin")
+		self._session.begin(subtransactions=True)
 		try:
 			yield self._session
-			self._session.commit()
 		except SQLAlchemyError:
 			self._session.rollback()
 			raise
+		finally:
+			self._session.commit()

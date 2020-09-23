@@ -1,4 +1,7 @@
 import typing
+if typing.TYPE_CHECKING:
+	from core.responses import TH_ERRORS
+
 import json
 import base64
 import pathlib
@@ -18,7 +21,7 @@ _STRING_ENCODING = "utf-8"
 class TokenError(Exception):
 	errors: list
 
-	def __init__(self, errors: typing.Any):
+	def __init__(self, errors: 'TH_ERRORS'):
 		super().__init__()
 		self.errors = errors if type(errors) is list else [errors]
 
@@ -65,12 +68,15 @@ class Token:
 		return Token(header, payload, signature)
 
 	@staticmethod
-	def from_string(string: str) -> 'Token':
+	def from_string(string: str = None) -> 'Token':
 		"""
 		Raises
 		-------
 		TokenError
 		"""
+		if string is None:
+			raise TokenError("Missing")
+
 		string_split = string.split(".")
 		try:
 			header_str = string_split[0]

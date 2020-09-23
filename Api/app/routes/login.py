@@ -1,12 +1,12 @@
 import typing
 if typing.TYPE_CHECKING:
-	from controllers.login import Login as th_Login
+	from controllers.login import Login as th_c_Login
 
 import flask
 from core.request import Request
 
 
-def init(c_login: 'th_Login') -> flask.Blueprint:
+def init(c_login: 'th_c_Login') -> flask.Blueprint:
 	bp_login = flask.Blueprint("bp_login", __name__)
 
 	@bp_login.route("/login", methods=["POST"])

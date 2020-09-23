@@ -9,16 +9,24 @@ import flask.json
 import isodate
 import sqlalchemy.exc
 
-import controllers.users
+import core.config
+import core.database
+import core.tokens
+
+import models.rooms_bans
+import models.rooms_users
+import models.posts
+import models.rooms
+import models.users_bans
+import models.users
+
 import controllers.login
+import controllers.users
+
+import services.auth
 
 import routes.login
 import routes.users
-
-import utils.jwt
-from core.auth import Auth
-from data.db import Database
-from core.config import Config
 
 
 # Ensures ISO-8601 datetime in json
@@ -31,32 +39,39 @@ class AppJsonEncoder(flask.json.JSONEncoder):
 
 
 def main():
-	cfg = Config(sys.path[0], "config")
-
+	# Config
+	cfg = core.config.Config(sys.path[0], "config")
 	private_key_pass = getpass.getpass(prompt=f"Private key password: ") if cfg[cfg.TOKENS_PRIVATE_KEY_PROTECETD] else None
-	private_key = utils.jwt.read_private_key(cfg[cfg.TOKENS_PRIVATE_KEY_PATH], private_key_pass)
-	public_key = utils.jwt.read_public_key(cfg[cfg.TOKENS_PUBLIC_KEY_PATH])
+	private_key = core.tokens.read_private_key(cfg[cfg.TOKENS_PRIVATE_KEY_PATH], private_key_pass)
+	public_key = core.tokens.read_public_key(cfg[cfg.TOKENS_PUBLIC_KEY_PATH])
 	tokens_lifetime = isodate.parse_duration(cfg[cfg.TOKENS_LIFETIME])
-
+	strict_requests = cfg[cfg.APP_STRICT_REQUESTS]
+	# Core
 	password_hasher = argon2.PasswordHasher()
 	database = connect_db(cfg)
-	auth = Auth(database, public_key, tokens_lifetime)
-
-	c_users = controllers.users.Users(database, auth, password_hasher, cfg[cfg.APP_STRICT_REQUESTS])
-	c_login = controllers.login.Login(database, private_key, password_hasher, cfg[cfg.APP_STRICT_REQUESTS])
-
-	api_path = "/api"
-
+	# Models
+	m_rooms_bans = models.rooms_bans.RoomsBans(database)
+	m_rooms_users = models.rooms_users.RoomsUsers(database)
+	m_posts = models.posts.Posts(database)
+	m_rooms = models.rooms.Rooms(database, m_rooms_bans, m_rooms_users, m_posts)
+	m_users_bans = models.users_bans.UsersBans(database)
+	m_users = models.users.Users(database, m_rooms, m_rooms_users, m_posts, m_users_bans)
+	# Services
+	s_auth = services.auth.Auth(m_users, public_key, tokens_lifetime)
+	# Controllers
+	c_login = controllers.login.Login(m_users, s_auth, password_hasher, private_key, strict_requests)
+	c_users = controllers.users.Users(m_users, s_auth, password_hasher, strict_requests)
+	# Api
 	app = flask.Flask(__name__)
 	app.json_encoder = AppJsonEncoder
-
-	app.register_blueprint(routes.users.init(c_users), url_prefix=api_path)
-	app.register_blueprint(routes.login.init(c_login), url_prefix=api_path)
-
+	# Set up routes
+	app.register_blueprint(routes.login.init(c_login))
+	app.register_blueprint(routes.users.init(c_users))
+	# Start the app
 	app.run(port=cfg[cfg.APP_PORT], debug=cfg[cfg.APP_DEBUG])
 
 
-def connect_db(cfg: Config) -> Database:
+def connect_db(cfg: core.config.Config) -> core.database.Database:
 	# Get cfg
 	cfg_args = {
 		"host": cfg[cfg.DB_HOST],
@@ -72,7 +87,7 @@ def connect_db(cfg: Config) -> Database:
 	# Try connection
 	while True:
 		try:
-			db = Database(
+			db = core.database.Database(
 				db_args["host"], db_args["port"],
 				db_args["name"], db_args["schema"],
 				db_args["user"], getpass.getpass(prompt=f"{db_args['user']} password: ")
@@ -88,7 +103,7 @@ def connect_db(cfg: Config) -> Database:
 				if click.confirm("Edit database info?"):
 					for key in db_args:
 						hint = "" if cfg_args[key] is None else f"({cfg_args[key]})"
-						db_args[key] = input(f"{key}{hint}: ")
+						db_args[key] = input(f"Database {key}{hint}: ")
 			else:
 				break
 	raise Exception("Failed to connect to the database.")
