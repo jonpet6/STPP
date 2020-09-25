@@ -8,25 +8,27 @@ import flask
 import flask.json
 import isodate
 import sqlalchemy.exc
-
+# Core
 import core.config
 import core.database
 import core.tokens
-
+# Models
 import models.rooms_bans
 import models.rooms_users
 import models.posts
 import models.rooms
 import models.users_bans
 import models.users
-
+# Services
+import services.auth
+# Controllers
 import controllers.login
 import controllers.users
-
-import services.auth
-
+import controllers.users_bans
+# Routes
 import routes.login
 import routes.users
+import routes.users_bans
 
 
 # Ensures ISO-8601 datetime in json
@@ -61,12 +63,14 @@ def main():
 	# Controllers
 	c_login = controllers.login.Login(m_users, s_auth, password_hasher, private_key, strict_requests)
 	c_users = controllers.users.Users(m_users, s_auth, password_hasher, strict_requests)
+	c_users_bans = controllers.users_bans.UsersBans(m_users_bans, s_auth, strict_requests)
 	# Api
 	app = flask.Flask(__name__)
 	app.json_encoder = AppJsonEncoder
 	# Set up routes
 	app.register_blueprint(routes.login.init(c_login))
 	app.register_blueprint(routes.users.init(c_users))
+	app.register_blueprint(routes.users_bans.init(c_users_bans))
 	# Start the app
 	app.run(port=cfg[cfg.APP_PORT], debug=cfg[cfg.APP_DEBUG])
 

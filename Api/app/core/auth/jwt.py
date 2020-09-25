@@ -18,7 +18,7 @@ from cryptography.hazmat.primitives.asymmetric.rsa import RSAPrivateKey, RSAPubl
 _STRING_ENCODING = "utf-8"
 
 
-class TokenError(Exception):
+class Error(Exception):
 	errors: list
 
 	def __init__(self, errors: 'TH_ERRORS'):
@@ -67,6 +67,27 @@ class Token:
 		signature = _sign_bytes(private_key, _encode_dict(payload_dict))
 		return Token(header, payload, signature)
 
+	def verify(self, public_key: RSAPublicKey, passhash: str, token_lifetime: datetime.timedelta) -> None:
+		"""
+		Raises
+		------
+		TokenError
+		"""
+		payload_dict = self._payload.to_dict()
+		payload_dict["passhash"] = passhash
+
+		try:
+			_verify_bytes(public_key, self._signature, _encode_dict(payload_dict))
+		except InvalidSignature:
+			raise Error("Invalid signature")
+
+		issued_at = datetime.datetime.fromisoformat(self._payload.issued_at)
+
+		if issued_at > datetime.datetime.utcnow():
+			raise Error("Invalid issue time")
+		if issued_at + token_lifetime < datetime.datetime.utcnow():
+			raise Error("No longer valid")
+
 	@staticmethod
 	def from_string(string: str = None) -> 'Token':
 		"""
@@ -75,7 +96,7 @@ class Token:
 		TokenError
 		"""
 		if string is None:
-			raise TokenError("Missing")
+			raise Error("Missing")
 
 		string_split = string.split(".")
 		try:
@@ -83,7 +104,7 @@ class Token:
 			payload_str = string_split[1]
 			signature_str = string_split[2]
 		except KeyError:
-			raise TokenError("Wrong token format")
+			raise Error("Wrong token format")
 
 		errors = []
 		try:
@@ -101,7 +122,7 @@ class Token:
 		signature = _decode_bytes(signature_str.encode(_STRING_ENCODING))
 
 		if errors:
-			raise TokenError(errors)
+			raise Error(errors)
 		else:
 			# noinspection PyUnboundLocalVariable
 			return Token(header, payload, signature)
@@ -116,27 +137,6 @@ class Token:
 		payload_str = _encode_dict(self._payload.to_dict()).decode(_STRING_ENCODING)
 		signature_str = _encode_bytes(self._signature).decode(_STRING_ENCODING)
 		return f"{header_str}.{payload_str}.{signature_str}"
-
-	def verify(self, public_key: RSAPublicKey, passhash: str, token_lifetime: datetime.timedelta) -> None:
-		"""
-		Raises
-		------
-		TokenError
-		"""
-		payload_dict = self._payload.to_dict()
-		payload_dict["passhash"] = passhash
-
-		try:
-			_verify_bytes(public_key, self._signature, _encode_dict(payload_dict))
-		except InvalidSignature:
-			raise TokenError("Invalid signature")
-
-		issued_at = datetime.datetime.fromisoformat(self._payload.issued_at)
-
-		if issued_at > datetime.datetime.utcnow():
-			raise TokenError("Invalid issue time")
-		if issued_at + token_lifetime < datetime.datetime.utcnow():
-			raise TokenError("No longer valid")
 
 
 def read_private_key(private_key_path: str, private_key_password: str = None) -> RSAPrivateKey:

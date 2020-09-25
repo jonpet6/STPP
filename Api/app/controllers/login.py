@@ -1,6 +1,6 @@
 import typing
 if typing.TYPE_CHECKING:
-	from models.users import Users as th_Users
+	from models.users import Users as th_m_Users
 	from core.request import Request as th_Request
 	from services.auth import Auth as th_s_Auth
 	from argon2 import PasswordHasher as th_PasswordHasher
@@ -8,18 +8,19 @@ if typing.TYPE_CHECKING:
 
 
 from sqlalchemy.exc import SQLAlchemyError
-from argon2.exceptions import VerifyMismatchError, VerificationError, InvalidHash
+from sqlalchemy.orm.exc import NoResultFound, MultipleResultsFound
+from argon2.exceptions import VerifyMismatchError, VerificationError, InvalidHash, HashingError
 
 
 from models import orm
 from core import responses
-from core.roles import Actions
-from core.tokens import Token, Claims
-from core.validation import ValidationError, JsonValidator, StringValidator
+from core import validation
+from core.auth import jwt
+from core.auth.actions import Actions
 
 
 class Login:
-	def __init__(self, m_users: 'th_Users', s_auth: 'th_s_Auth',
+	def __init__(self, m_users: 'th_m_Users', s_auth: 'th_s_Auth',
 					password_hasher: 'th_PasswordHasher', private_key: 'th_RSAPrivateKey', strict_requests: bool):
 		self._m_users = m_users
 		self._s_auth = s_auth
@@ -29,30 +30,29 @@ class Login:
 
 	def login(self, request: 'th_Request') -> responses.Response:
 		try:
+			# Validation
+			json = request.body
+			json_validator = validation.Json(False, False, False, not self._strict_requests, [
+				validation.Json.Key("login", False, validation.String(False, orm.Users.LOGIN_LEN_MIN, orm.Users.LOGIN_LEN_MAX)),
+				validation.Json.Key("password", False, validation.String(False, orm.Users.PASSWORD_LEN_MIN, orm.Users.PASSWORD_LEN_MAX))
+			])
+			try:
+				json_validator.validate(json)
+			except validation.Error as ve:
+				return responses.Unprocessable({"json": ve.errors})
+
 			# Authorization
 			auth_response = self._s_auth.verify_authorize_w_response(Actions.LOGIN, request.header.token)
 			if not isinstance(auth_response, responses.OKEmpty):
 				return auth_response
 
-			# Validation
-			json = request.body
-			json_validator = JsonValidator(False, False, False, not self._strict_requests, {
-				"login": StringValidator(False, orm.Users.LOGIN_LENGTH_MIN, orm.Users.LOGIN_LENGTH_MAX),
-				"password": StringValidator(False, orm.Users.PASSWORD_LENGTH_MIN, orm.Users.PASSWORD_LENGTH_MAX)
-			})
-			try:
-				json_validator.validate(json)
-			except ValidationError as ve:
-				return responses.Unprocessable(ve.errors)
-
 			# Query
-			users = self._m_users.get_by(json["login"])
-			if len(users) < 1:
-				return responses.NotFound({"login": ["No user match"]})
-			if len(users) > 1:
-				# Should never happen, theoretically
-				return responses.Conflict({"login": ["Multiple user matches"]})
-			user = users[0]
+			try:
+				user = self._m_users.get_by_login(json["login"])
+			except NoResultFound:
+				return responses.NotFound({"login": ["User with login doesn't exist"]})
+			except MultipleResultsFound as mrf:
+				return responses.InternalException(mrf, {"login": ["Not unique"]})
 
 			# Verify password
 			try:
@@ -64,16 +64,15 @@ class Login:
 
 			# Check rehash
 			if self._password_hasher.check_needs_rehash(user.passhash):
-				passhash_new = self._password_hasher.hash(json["password"])
 				try:
+					passhash_new = self._password_hasher.hash(json["password"])
 					self._m_users.update(user.id, passhash=passhash_new)
-				except SQLAlchemyError as sqlae:
+				except (HashingError, SQLAlchemyError, NoResultFound, MultipleResultsFound) as err:
 					# Not crucial
 					# TODO log
-					print(sqlae)
-
+					print(err)
 			# Generate and return token
-			token = Token.generate(Claims(user.id), self._private_key, user.passhash)
+			token = jwt.Token.generate(jwt.Claims(user.id), self._private_key, user.passhash)
 			return responses.OK(token.to_string())
 		except SQLAlchemyError as sqlae:
 			return responses.DatabaseException(sqlae)

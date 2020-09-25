@@ -2,16 +2,16 @@ import typing
 if typing.TYPE_CHECKING:
 	TH_ALLOWED_IDS = typing.Union[int, typing.List[int]]
 	from models.users import Users as th_d_Users
-	from core.roles import Actions as th_Actions
 	from core.responses import TH_ERRORS
+	from core.auth.actions import Actions as th_Actions
 	from datetime import timedelta as th_timedelta
 	from cryptography.hazmat.primitives.asymmetric.rsa import RSAPublicKey as th_RSAPublicKey
 
 from sqlalchemy.exc import SQLAlchemyError
 
-from core.tokens import Token, TokenError
-from core.roles import Roles
 from core import responses
+from core.auth import jwt
+from core.auth.roles import Roles
 
 
 class AuthError(Exception):
@@ -34,7 +34,7 @@ class Auth:
 		self._public_key = public_key
 		self._token_lifetime = token_lifetime
 
-	def verify_token(self, token: str = None) -> Token:
+	def verify_token(self, token: str = None) -> jwt.Token:
 		"""
 		Raises
 		-------
@@ -43,15 +43,15 @@ class Auth:
 		sqlalchemy.exc.SQLAlchemyError
 			On database error
 		"""
-		token_valid = Token.from_string(token)
+		token_valid = jwt.Token.from_string(token)
 		try:
 			orm_user = self._d_users.get(token_valid.claims.user_id)
 		except ValueError:
-			raise TokenError("Token's user does not exist")
+			raise jwt.Error("Token's user does not exist")
 		token_valid.verify(self._public_key, orm_user.passhash, self._token_lifetime)
 		return token_valid
 
-	def authorize(self, action: 'th_Actions', token: Token = None, allowed_ids: 'TH_ALLOWED_IDS' = None) -> None:
+	def authorize(self, action: 'th_Actions', token: jwt.Token = None, allowed_ids: 'TH_ALLOWED_IDS' = None) -> None:
 		"""
 		Raises
 		-------
@@ -82,7 +82,7 @@ class Auth:
 		# ID is not allowed, check role access
 		# Get user's role
 		try:
-			role = Roles.by_id(orm_user.role)
+			role = Roles[orm_user.role]
 		except KeyError:
 			raise AuthError("Token's user's role does not exist")
 		# Access by role
@@ -95,12 +95,12 @@ class Auth:
 		try:
 			token = self.verify_token(token)
 			return responses.OK(token)
-		except TokenError as te:
+		except jwt.Error as te:
 			return responses.Unauthorized({"token": te.errors})
 		except SQLAlchemyError as sqlae:
 			return responses.DatabaseException(sqlae)
 
-	def authorize_w_response(self, action: 'th_Actions', token: Token = None, allowed_ids: 'TH_ALLOWED_IDS' = None):
+	def authorize_w_response(self, action: 'th_Actions', token: jwt.Token = None, allowed_ids: 'TH_ALLOWED_IDS' = None):
 		try:
 			self.authorize(action, token, allowed_ids)
 			return responses.OKEmpty()
@@ -119,7 +119,7 @@ class Auth:
 			errors = []
 			try:
 				token_verified = self.verify_token(token)
-			except TokenError as te:
+			except jwt.Error as te:
 				errors.append({"token": te.errors})
 			try:
 				self.authorize(action, token_verified, allowed_ids)

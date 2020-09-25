@@ -14,28 +14,26 @@ class RoomsUsers:
 		Raises
 		-------
 		sqlalchemy.exc.IntegrityError
+			Room with room_id doesn't exist or User with user_id doesn't exist
 		sqlalchemy.exc.SQLAlchemyError
 		"""
 		with self._database.scope as scope:
-			scope.add(
-				orm.RoomsUsers(room_id=room_id, user_id=user_id)
-			)
+			scope.add(orm.RoomsUsers(room_id=room_id, user_id=user_id))
 
-	def get(self, room_id: int, user_id) -> orm.RoomsUsers:
+	def get(self, room_id: int, user_id: int) -> typing.List[orm.RoomsUsers]:
 		"""
 		Raises
 		-------
-		ValueError
+		sqlalchemy.orm.exc.NoResultFound
+			RoomsUsers with (room_id, user_id) doesn't exist
+		sqlalchemy.orm.exc.MultipleResultsFound
+			(room_id, user_id) pair is not unique in RoomsUsers
 		sqlalchemy.exc.SQLAlchemyError
 		"""
 		with self._database.scope as scope:
-			room_user = scope.query(orm.RoomsBans).get((room_id, user_id))
-		if room_user is not None:
-			return room_user
-		else:
-			raise ValueError("Room user doesn't exist")
+			return scope.query(orm.RoomsUsers).one((room_id, user_id))
 
-	def get_by(self, room_id_filter: int = None, user_id_filter: int = None) -> typing.List[orm.RoomsUsers]:
+	def get_all(self, room_id_filter: int = None, user_id_filter: int = None) -> typing.List[orm.RoomsUsers]:
 		"""
 		Raises
 		-------
@@ -49,28 +47,50 @@ class RoomsUsers:
 				query = query.filter(orm.RoomsUsers.user_id == user_id_filter)
 			return query.all()
 
-	# def update(self, room_id: int, reason: str):
-	# Can't update primary keys
+	def get_all_visible(self, user_id: int, room_id_filter: int = None, user_id_filter: int = None) -> typing.List[orm.RoomsUsers]:
+		"""
+		Raises
+		-------
+		sqlalchemy.exc.SQLAlchemyError
+		"""
+		with self._database.scope as scope:
+			query = scope.query(orm.RoomsUsers).filter(
+				orm.RoomsUsers.room_id.in_(
+					# All rooms which have the user_id in them
+					scope.query(orm.RoomsUsers.room_id).filter(
+						orm.RoomsUsers.user_id == user_id
+					).all()
+				)
+			)
+			if room_id_filter is not None:
+				query = query.filter(orm.RoomsUsers.room_id == room_id_filter)
+			if user_id_filter is not None:
+				query = query.filter(orm.RoomsUsers.user_id == user_id_filter)
+			return query.all()
 
 	def delete(self, room_id: int, user_id: int) -> None:
 		"""
 		Raises
 		-------
-		ValueError
+		sqlalchemy.orm.exc.NoResultFound
+			RoomsUsers with (room_id, user_id) doesn't exist
+		sqlalchemy.orm.exc.MultipleResultsFound
+			(room_id, user_id) pair is not unique in RoomsUsers
 		sqlalchemy.exc.SQLAlchemyError
 		"""
 		with self._database.scope as scope:
-			room_user = self.get(room_id, user_id)
-			scope.delete(room_user)
+			scope.delete(self.get(room_id, user_id))
 
-	def delete_by(self, room_id_filter: int = None, user_id_filter: int = None) -> None:
+	def delete_all(self, room_id_filter: int = False, user_id_filter: int = False) -> None:
 		"""
 		Raises
 		-------
-		ValueError
 		sqlalchemy.exc.SQLAlchemyError
 		"""
 		with self._database.scope as scope:
-			rooms_users = self.get_by(room_id_filter, user_id_filter)
-			if len(rooms_users) > 0:
-				scope.delete(rooms_users)
+			query = scope.query(orm.RoomsUsers)
+			if room_id_filter is not None:
+				query.filter(orm.RoomsUsers.room_id == room_id_filter)
+			if user_id_filter is not None:
+				query.filter(orm.RoomsUsers.user_id == user_id_filter)
+			query.delete()

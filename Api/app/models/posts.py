@@ -14,28 +14,26 @@ class Posts:
 		Raises
 		-------
 		sqlalchemy.exc.IntegrityError
+			Room with room_id doesn't exist or User with user_id doesn't exist
 		sqlalchemy.exc.SQLAlchemyError
 		"""
 		with self._database.scope as scope:
-			scope.add(
-				orm.Posts(date_updated=None, room_id=room_id, user_id=user_id, content=content)
-			)
+			scope.add(orm.Posts(date_updated=None, room_id=room_id, user_id=user_id, content=content))
 
 	def get(self, post_id: int) -> orm.Posts:
 		"""
 		Raises
 		-------
-		ValueError
+		sqlalchemy.orm.exc.NoResultFound
+			Post with post_id doesn't exist
+		sqlalchemy.orm.exc.MultipleResultsFound
+			post_id is not unique in Posts
 		sqlalchemy.exc.SQLAlchemyError
 		"""
 		with self._database.scope as scope:
-			post = scope.query(orm.Posts).get(post_id)
-		if post is not None:
-			return post
-		else:
-			raise ValueError("Post doesn't exist")
+			return scope.query(orm.Posts).one(post_id)
 
-	def get_by(self, room_id_filter: int = None, user_id_filter: int = None) -> typing.List[orm.Posts]:
+	def get_all(self, room_id_filter: int = None, user_id_filter: int = None) -> typing.List[orm.Posts]:
 		"""
 		Raises
 		-------
@@ -53,35 +51,38 @@ class Posts:
 		"""
 		Raises
 		-------
-		ValueError
-		sqlalchemy.exc.IntegrityError
+		sqlalchemy.orm.exc.NoResultFound
+			Post with post_id doesn't exist
+		sqlalchemy.orm.exc.MultipleResultsFound
+			post_id is not unique in Posts
 		sqlalchemy.exc.SQLAlchemyError
 		"""
 		with self._database.scope:
-			post = self.get(post_id)
-			if content is not None:
-				post.content = content
-			# TODO check updated?
+			self.get(post_id).content = content
 
 	def delete(self, post_id: int) -> None:
 		"""
 		Raises
 		-------
-		ValueError
+		sqlalchemy.orm.exc.NoResultFound
+			Post with post_id doesn't exist
+		sqlalchemy.orm.exc.MultipleResultsFound
+			post_id is not unique in Posts
 		sqlalchemy.exc.SQLAlchemyError
 		"""
 		with self._database.scope as scope:
-			post = self.get(post_id)
-			scope.delete(post)
+			scope.delete(self.get(post_id))
 
-	def delete_by(self, room_id_filter: int = None, user_id_filter: int = None) -> None:
+	def delete_all(self, room_id_filter: int = None, user_id_filter: int = None) -> None:
 		"""
 		Raises
 		-------
-		ValueError
 		sqlalchemy.exc.SQLAlchemyError
 		"""
 		with self._database.scope as scope:
-			rooms_posts = self.get_by(room_id_filter, user_id_filter)
-			if len(rooms_posts) > 0:
-				scope.delete(rooms_posts)
+			query = scope.query(orm.Posts)
+			if room_id_filter is not None:
+				query = query.filter(orm.Posts.room_id == room_id_filter)
+			if user_id_filter is not None:
+				query = query.filter(orm.Posts.user_id == user_id_filter)
+			query.delete()

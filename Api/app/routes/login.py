@@ -3,7 +3,7 @@ if typing.TYPE_CHECKING:
 	from controllers.login import Login as th_c_Login
 
 import flask
-from core.request import Request
+from core import request
 
 
 def init(c_login: 'th_c_Login') -> flask.Blueprint:
@@ -11,6 +11,10 @@ def init(c_login: 'th_c_Login') -> flask.Blueprint:
 
 	@bp_login.route("/login", methods=["POST"])
 	def login():
-		return c_login.login(Request.from_flask(flask.request)).to_flask()
+		try:
+			req = request.Request.from_flask(flask.request.get_data())
+		except request.Error as re:
+			return re.response
+		return c_login.login(req).to_flask()
 
 	return bp_login

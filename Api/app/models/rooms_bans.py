@@ -14,28 +14,26 @@ class RoomsBans:
 		Raises
 		-------
 		sqlalchemy.exc.IntegrityError
+			Room with room_id doesn't exist or User with banner_id doesn't exist
 		sqlalchemy.exc.SQLAlchemyError
 		"""
 		with self._database.scope as scope:
-			scope.add(
-				orm.RoomsBans(room_id=room_id, banner_id=banner_id, reason=reason)
-			)
+			scope.add(orm.RoomsBans(room_id=room_id, banner_id=banner_id, reason=reason))
 
 	def get(self, room_id: int) -> orm.RoomsBans:
 		"""
 		Raises
 		-------
-		ValueError
+		sqlalchemy.orm.exc.NoResultFound
+			RoomsBans with room_id doesn't exist
+		sqlalchemy.orm.exc.MultipleResultsFound
+			room_id is not unique in RoomsBans
 		sqlalchemy.exc.SQLAlchemyError
 		"""
 		with self._database.scope as scope:
-			room_ban = scope.query(orm.RoomsBans).get(room_id)
-		if room_ban is not None:
-			return room_ban
-		else:
-			raise ValueError("Room ban doesn't exist")
+			return scope.query(orm.RoomsBans).one(room_id)
 
-	def get_by(self, room_id_filter: int = None, banner_id_filter: int = None) -> typing.List[orm.RoomsBans]:
+	def get_all(self, room_id_filter: int = None, banner_id_filter: int = None) -> typing.List[orm.RoomsBans]:
 		"""
 		Raises
 		-------
@@ -53,21 +51,38 @@ class RoomsBans:
 		"""
 		Raises
 		-------
-		ValueError
-		sqlalchemy.exc.IntegrityError
+		sqlalchemy.orm.exc.NoResultFound
+			RoomsBans with room_id doesn't exist
+		sqlalchemy.orm.exc.MultipleResultsFound
+			room_id is not unique in RoomsBans
 		sqlalchemy.exc.SQLAlchemyError
 		"""
 		with self._database.scope:
-			room_ban = self.get(room_id)
-			room_ban.reason = reason
+			self.get(room_id).reason = reason
 
 	def delete(self, room_id: int) -> None:
 		"""
 		Raises
 		-------
-		ValueError
+		sqlalchemy.orm.exc.NoResultFound
+			RoomsBans with room_id doesn't exist
+		sqlalchemy.orm.exc.MultipleResultsFound
+			room_id is not unique in RoomsBans
 		sqlalchemy.exc.SQLAlchemyError
 		"""
 		with self._database.scope as scope:
-			room_ban = self.get(room_id)
-			scope.delete(room_ban)
+			scope.delete(self.get(room_id))
+
+	def delete_all(self, room_id_filter: int = None, banner_id_filter: int = None) -> None:
+		"""
+		Raises
+		-------
+		sqlalchemy.exc.SQLAlchemyError
+		"""
+		with self._database.scope as scope:
+			query = scope.query(orm.RoomsBans)
+			if room_id_filter is not None:
+				query = query.filter(orm.RoomsBans.room_id == room_id_filter)
+			if banner_id_filter is not None:
+				query = query.filter(orm.RoomsBans.banner_id == banner_id_filter)
+			query.delete()

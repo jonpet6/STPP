@@ -43,7 +43,7 @@ class Database:
 
 	@property
 	@contextlib.contextmanager
-	def scope(self) -> 'th_Session':
+	def scope(self) -> typing.ContextManager['th_Session']:
 		"""
 		A scope for a transaction
 		Automatically commits and closes, rolls back on failure

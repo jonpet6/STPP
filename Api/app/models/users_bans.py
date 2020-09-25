@@ -14,28 +14,26 @@ class UsersBans:
 		Raises
 		-------
 		sqlalchemy.exc.IntegrityError
+			User with user_id doesn't exist or User with banner_id doesn't exist
 		sqlalchemy.exc.SQLAlchemyError
 		"""
 		with self._database.scope as scope:
-			scope.add(
-				orm.UsersBans(user_id=user_id, banner_id=banner_id, reason=reason)
-			)
+			scope.add(orm.UsersBans(user_id=user_id, banner_id=banner_id, reason=reason))
 
 	def get(self, user_id: int) -> orm.UsersBans:
 		"""
 		Raises
 		-------
-		ValueError
+		sqlalchemy.orm.exc.NoResultFound
+			UsersBans with user_id doesn't exist
+		sqlalchemy.orm.exc.MultipleResultsFound
+			user_id is not unique in UsersBans
 		sqlalchemy.exc.SQLAlchemyError
 		"""
 		with self._database.scope as scope:
-			user_ban = scope.query(orm.UsersBans).get(user_id)
-		if user_ban is not None:
-			return user_ban
-		else:
-			raise ValueError("User ban doesn't exist")
+			return scope.query(orm.UsersBans).one(user_id)
 
-	def get_by(self, user_id_filter: int = None, banner_id_filter: int = None) -> typing.List[orm.UsersBans]:
+	def get_all(self, user_id_filter: int = None, banner_id_filter: int = None) -> typing.List[orm.UsersBans]:
 		"""
 		Raises
 		-------
@@ -53,22 +51,38 @@ class UsersBans:
 		"""
 		Raises
 		-------
-		ValueError
-		sqlalchemy.exc.IntegrityError
+		sqlalchemy.orm.exc.NoResultFound
+			UsersBans with user_id doesn't exist
+		sqlalchemy.orm.exc.MultipleResultsFound
+			user_id is not unique in UsersBans
 		sqlalchemy.exc.SQLAlchemyError
 		"""
 		with self._database.scope:
-			user_ban = self.get(user_id)
-			user_ban.reason = reason
+			self.get(user_id).reason = reason
 
 	def delete(self, user_id: int) -> None:
 		"""
 		Raises
 		-------
-		ValueError
+		sqlalchemy.orm.exc.NoResultFound
+			UsersBans with user_id doesn't exist
+		sqlalchemy.orm.exc.MultipleResultsFound
+			user_id is not unique in UsersBans
 		sqlalchemy.exc.SQLAlchemyError
 		"""
 		with self._database.scope as scope:
-			user_ban = self.get(user_id)
-			if len(user_ban) > 0:
-				scope.delete(user_ban)
+			scope.delete(self.get(user_id))
+
+	def delete_all(self, user_id_filter: int = None, banner_id_filter: int = None) -> None:
+		"""
+		Raises
+		-------
+		sqlalchemy.exc.SQLAlchemyError
+		"""
+		with self._database.scope as scope:
+			query = scope.query(orm.UsersBans)
+			if user_id_filter is not None:
+				query = query.filter(orm.UsersBans.user_id == user_id_filter)
+			if banner_id_filter is not None:
+				query = query.filter(orm.UsersBans.banner_id == banner_id_filter)
+			query.delete()

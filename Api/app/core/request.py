@@ -5,6 +5,13 @@ if typing.TYPE_CHECKING:
 from dataclasses import dataclass
 import json
 
+from core import responses
+
+
+class Error:
+	def __init__(self, response: responses.Response):
+		self.response = response
+
 
 @dataclass
 class Header:
@@ -18,15 +25,14 @@ class Request:
 
 	@staticmethod
 	def from_flask(flask_request: 'th_flask_request') -> 'Request':
-		flask_header = flask_request.headers
 		header = Header(
-			flask_header.get("token")
+			flask_request.headers.get("token")
 		)
 
-		data = flask_request.get_data()
 		try:
-			body = json.loads(data.decode("utf-8"))
+			body = json.loads(flask_request.get_data())
 		except json.JSONDecodeError:
-			body = None
+			raise Error(responses.Unprocessable({"json": ["Corrupt"]}))
 
 		return Request(header, body)
+
