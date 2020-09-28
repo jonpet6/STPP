@@ -5,6 +5,8 @@ if typing.TYPE_CHECKING:
 	from models.rooms_bans import RoomsBans as th_m_RoomsBans
 	from models.posts import Posts as th_m_Posts
 
+from sqlalchemy import or_
+
 from models import orm
 
 
@@ -37,7 +39,7 @@ class Rooms:
 		sqlalchemy.exc.SQLAlchemyError
 		"""
 		with self._database.scope as scope:
-			return scope.query(orm.Rooms).one(room_id)
+			return scope.query(orm.Rooms).filter(orm.Rooms.id == room_id).one()
 
 	def get_all(self, user_id_filter: int = None) -> typing.List[orm.Rooms]:
 		"""
@@ -47,6 +49,43 @@ class Rooms:
 		"""
 		with self._database.scope as scope:
 			query = scope.query(orm.Rooms)
+			if user_id_filter is not None:
+				query = query.filter(orm.Rooms.user_id == user_id_filter)
+			return query.all()
+
+	def get_all_visible(self, user_id: int, user_id_filter: int = None) -> typing.List[orm.Rooms]:
+		"""
+		Raises
+		-------
+		sqlalchemy.exc.SQLAlchemyError
+		"""
+		with self._database.scope as scope:
+			query = scope.query(orm.Rooms).filter(
+				or_(
+					# Rooms which user has created
+					orm.Rooms.user_id == user_id,
+					# Rooms with user
+					orm.Rooms.id.in_(scope.query(orm.RoomsUsers.room_id).filter(orm.RoomsUsers.user_id == user_id)),
+					# Public rooms
+					orm.Rooms.id.notin_(scope.query(orm.RoomsUsers.room_id).all())
+				)
+			)
+			if user_id_filter is not None:
+				query = query.filter(orm.Rooms.user_id == user_id_filter)
+			return query.all()
+
+	def get_all_public(self, user_id_filter: int = None) -> typing.List[orm.Rooms]:
+		"""
+		Raises
+		-------
+		sqlalchemy.exc.SQLAlchemyError
+		"""
+		with self._database.scope as scope:
+			query = scope.query(orm.Rooms).filter(
+				orm.Rooms.id.notin_(
+					scope.query(orm.RoomsUsers.room_id).all()
+				)
+			)
 			if user_id_filter is not None:
 				query = query.filter(orm.Rooms.user_id == user_id_filter)
 			return query.all()
@@ -94,46 +133,3 @@ class Rooms:
 		with self._database.scope:
 			for room in self.get_all(creator_id_filter):
 				self.delete(room.id)
-
-	#
-	# ROOMS USERS
-	#
-
-	def get_all_private(self) -> typing.List[orm.Rooms]:
-		"""
-		Raises
-		-------
-		sqlalchemy.exc.SQLAlchemyError
-		"""
-		with self._database.scope as scope:
-			return scope.query(orm.Rooms).filter(
-				orm.Rooms.id.in_(
-					scope.query(orm.RoomsUsers.room_id).all()
-				)
-			)
-
-	def get_all_public(self) -> typing.List[orm.Rooms]:
-		"""
-		Raises
-		-------
-		sqlalchemy.exc.SQLAlchemyError
-		"""
-		with self._database.scope as scope:
-			return scope.query(orm.Rooms).filter(
-				orm.Rooms.id.notin_(
-					scope.query(orm.RoomsUsers.room_id).all()
-				)
-			)
-
-	def get_all_private_visible(self, user_id: int) -> typing.List[orm.Rooms]:
-		"""
-		Raises
-		-------
-		sqlalchemy.exc.SQLAlchemyError
-		"""
-		with self._database.scope as scope:
-			return scope.query(orm.Rooms).filter(
-				orm.Rooms.id.in_(
-					scope.query(orm.RoomsUsers.room_id).filter(orm.RoomsUsers.user_id == user_id)
-				)
-			)

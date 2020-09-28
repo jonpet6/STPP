@@ -71,7 +71,7 @@ class Token:
 		"""
 		Raises
 		------
-		TokenError
+		jwt.Error
 		"""
 		payload_dict = self._payload.to_dict()
 		payload_dict["passhash"] = passhash
@@ -93,7 +93,7 @@ class Token:
 		"""
 		Raises
 		-------
-		TokenError
+		jwt.Error
 		"""
 		if string is None:
 			raise Error("Missing")

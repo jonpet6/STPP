@@ -10,7 +10,8 @@ from sqlalchemy.orm.exc import NoResultFound, MultipleResultsFound
 
 from core import responses
 from core import validation
-from core.auth.actions import Actions
+from core.auth.user import Registered
+from core.auth.action import Action
 
 
 class RoomsUsers:
@@ -42,7 +43,7 @@ class RoomsUsers:
 				return responses.InternalException(mrf, "room_id is not unique")
 
 			# Authorization
-			auth_response = self._s_auth.verify_authorize_w_response(Actions.ROOMS_USERS_CREATE, request.header.token, orm_room.user_id)
+			auth_response = self._s_auth.authorize(Action.ROOMS_USERS_CREATE, request.user, orm_room.user_id)
 			if not isinstance(auth_response, responses.OKEmpty):
 				return auth_response
 
@@ -77,10 +78,10 @@ class RoomsUsers:
 				return responses.InternalException(mrf, {"room_id": ["Not unique"]})
 			# Which users can access this method
 			orm_room_users = self._m_rooms_users.get_all(room_id_filter=orm_room.id)
-			room_users_ids = [orm_room_user.user_id for orm_room_user in orm_room_users]
 
 			# Authorization
-			auth_response = self._s_auth.verify_authorize_w_response(Actions.ROOMS_USERS_GET, request.header.token, [orm_room.user_id] + room_users_ids)
+			allowed_ids = [orm_room.user_id] + [orm_room_user.user_id for orm_room_user in orm_room_users]
+			auth_response = self._s_auth.authorize(Action.ROOMS_USERS_GET, request.user, allowed_ids)
 			if not isinstance(auth_response, responses.OKEmpty):
 				return auth_response
 
@@ -91,7 +92,7 @@ class RoomsUsers:
 			except NoResultFound:
 				return responses.NotFound({"user_id": ["User with room_id doesn't exist"]})
 			except MultipleResultsFound as mrf:
-				return responses.InternalException(mrf, [{"room_id": ["Not unique"]}, {"user_id": ["Not unique"]}])
+				return responses.InternalException(mrf, [{"user_id": ["Not unique"]}])
 		except SQLAlchemyError as sqlae:
 			return responses.DatabaseException(sqlae)
 
@@ -99,36 +100,36 @@ class RoomsUsers:
 		try:
 			# Validation
 			json = request.body
-			json_validator = validation.Json(False, False, False, not self._strict_requests, [
-				validation.Json.Key("room_id", False, validation.Integer(False)),
-				validation.Json.Key("user_id", False, validation.Integer(False))
+			json_validator = validation.Json(True, True, True, not self._strict_requests, [
+				validation.Json.Key("room_id", True, validation.Integer(False)),
+				validation.Json.Key("user_id", True, validation.Integer(False))
 			])
 			try:
 				json_validator.validate(json)
 			except validation.Error as ve:
 				return responses.Unprocessable({"json": ve.errors})
+			# Filters
+			room_id_filter = None if json is None else json.get("room_id")
+			user_id_filter = None if json is None else json.get("user_id")
 
-			# Token verification
-			token = None
-			if request.header.token is not None:
-				verify_response = self._s_auth.verify_w_response(request.header.token)
-				if not isinstance(verify_response, responses.OK):
-					return verify_response
-				token = verify_response.object
-
-			# Authorization
-			auth_response = self._s_auth.authorize_w_response(Actions.ROOMS_USERS_GET_ALL, token)
+			# Authorization (get all)
+			auth_response = self._s_auth.authorize(Action.ROOMS_USERS_GET_ALL, request.user)
 			if isinstance(auth_response, responses.OKEmpty):
-				# return all
-				result = self._m_rooms_users.get_all(room_id_filter=json.get("room_id"), user_id_filter=json.get("user_id"))
+				result = self._m_rooms_users.get_all(room_id_filter, user_id_filter)
 				return responses.OK(result)
 
-			# Return only visible
-			if token is not None:
-				result = self._m_rooms_users.get_all_visible(token.claims.user_id, room_id_filter=json.get("room_id"), user_id_filter=json.get("user_id"))
-				return responses.OK(result)
+			# Authorization (get visible)
+			auth_response = self._s_auth.authorize(Action.ROOMS_USERS_GET_VISIBLE, request.user)
+			if isinstance(auth_response, responses.OKEmpty):
+				if isinstance(request.user, Registered):
+					result = self._m_rooms_users.get_all_visible(request.user.user_id, room_id_filter, user_id_filter)
+					return responses.OK(result)
+				else:
+					# TODO CAN STILL VIEW?
+					# An unregistered user cannot create nor participate in a private room
+					return responses.OK([])
 			else:
-				return responses.Unauthorized({"token": ["Missing"]})
+				return auth_response
 		except SQLAlchemyError as sqlae:
 			return responses.DatabaseException(sqlae)
 
@@ -157,7 +158,7 @@ class RoomsUsers:
 				return responses.InternalException(mrf, {"room_id": ["Not unique"]})
 
 			# Authorization
-			auth_response = self._s_auth.verify_authorize_w_response(Actions.ROOMS_USERS_DELETE, request.header.token, orm_room.user_id)
+			auth_response = self._s_auth.authorize(Action.USERS_BANS_CREATE, request.user, orm_room.user_id)
 			if not isinstance(auth_response, responses.OKEmpty):
 				return auth_response
 

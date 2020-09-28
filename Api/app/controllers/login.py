@@ -16,7 +16,7 @@ from models import orm
 from core import responses
 from core import validation
 from core.auth import jwt
-from core.auth.actions import Actions
+from core.auth.action import Action
 
 
 class Login:
@@ -30,6 +30,11 @@ class Login:
 
 	def login(self, request: 'th_Request') -> responses.Response:
 		try:
+			# Authorization
+			auth_response = self._s_auth.authorize(Action.LOGIN, request.user)
+			if not isinstance(auth_response, responses.OKEmpty):
+				return auth_response
+
 			# Validation
 			json = request.body
 			json_validator = validation.Json(False, False, False, not self._strict_requests, [
@@ -40,11 +45,6 @@ class Login:
 				json_validator.validate(json)
 			except validation.Error as ve:
 				return responses.Unprocessable({"json": ve.errors})
-
-			# Authorization
-			auth_response = self._s_auth.verify_authorize_w_response(Actions.LOGIN, request.header.token)
-			if not isinstance(auth_response, responses.OKEmpty):
-				return auth_response
 
 			# Query
 			try:
@@ -71,6 +71,7 @@ class Login:
 					# Not crucial
 					# TODO log
 					print(err)
+
 			# Generate and return token
 			token = jwt.Token.generate(jwt.Claims(user.id), self._private_key, user.passhash)
 			return responses.OK(token.to_string())

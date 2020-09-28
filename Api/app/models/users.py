@@ -43,7 +43,8 @@ class Users:
 		sqlalchemy.exc.SQLAlchemyError
 		"""
 		with self._database.scope as scope:
-			return scope.query(orm.Users).one(user_id)
+			print(user_id)
+			return scope.query(orm.Users).filter(orm.Users.id == user_id).one()
 
 	def get_by_login(self, login: str) -> orm.Users:
 		"""
@@ -56,7 +57,7 @@ class Users:
 		sqlalchemy.exc.SQLAlchemyError
 		"""
 		with self._database.scope as scope:
-			return scope.query(orm.Users).filter(orm.Users.login == login)
+			return scope.query(orm.Users).filter(orm.Users.login == login).one()
 
 	def get_all(self, login_filter: str = None) -> typing.List[orm.Users]:
 		"""

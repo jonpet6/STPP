@@ -75,7 +75,7 @@ class String(Validator):
 		if self._length_max is not None and len(obj) > self._length_max:
 			errors.append(f"Longer than {self._length_max}")
 
-		if len(errors) > 1:
+		if len(errors) > 0:
 			raise Error(errors)
 
 
@@ -116,11 +116,12 @@ class Json(Validator):
 		json_keys_set = set(obj.keys())
 		defined_keys_set = set([jsonvkey.name for jsonvkey in self._keys])
 		# Check for undefined keys
-		if not self._allow_undefined_keys and len(json_keys_set.difference(defined_keys_set)) < 1:
+		if not self._allow_undefined_keys and len(json_keys_set.difference(defined_keys_set)) > 0:
 			errors.append("Contains undefined keys")
 
 		missing_keys = []
 
+		# Validate all defined keys
 		for key in self._keys:
 			try:
 				value = obj[key.name]

@@ -13,7 +13,7 @@ from models import orm
 from core import responses
 from core import validation
 from core.auth.roles import Roles
-from core.auth.actions import Actions
+from core.auth.action import Action
 
 
 class Users:
@@ -25,6 +25,11 @@ class Users:
 
 	def create(self, request: 'th_Request') -> responses.Response:
 		try:
+			# Authorization
+			auth_response = self._s_auth.authorize(Action.USERS_CREATE, request.user)
+			if not isinstance(auth_response, responses.OKEmpty):
+				return auth_response
+
 			# Validation
 			json = request.body
 			json_validator = validation.Json(False, False, False, not self._strict_requests, [
@@ -36,11 +41,6 @@ class Users:
 				json_validator.validate(json)
 			except validation.Error as ve:
 				return responses.Unprocessable({"json": ve.errors})
-
-			# Authorization
-			auth_response = self._s_auth.verify_authorize_w_response(Actions.USERS_CREATE, request.header.token)
-			if not isinstance(auth_response, responses.OKEmpty):
-				return auth_response
 
 			# Hash password
 			try:
@@ -70,7 +70,7 @@ class Users:
 				return responses.Unprocessable({"json": ve.errors})
 
 			# Authorization
-			auth_response = self._s_auth.verify_authorize_w_response(Actions.USERS_GET, request.header.token, json["user_id"])
+			auth_response = self._s_auth.authorize(Action.USERS_GET, request.user, json["user_id"])
 			if not isinstance(auth_response, responses.OKEmpty):
 				return auth_response
 
@@ -87,24 +87,26 @@ class Users:
 
 	def get_all(self, request: 'th_Request') -> responses.Response:
 		try:
-			# Validation
-			json = request.body
-			json_validator = validation.Json(True, True, True, not self._strict_requests, [
-				validation.Json.Key("login", True, validation.String(False, orm.Users.LOGIN_LEN_MIN, orm.Users.LOGIN_LEN_MAX))
-			])
-			try:
-				json_validator.validate(json)
-			except validation.Error as ve:
-				return responses.Unprocessable({"json": ve.errors})
-
 			# Authorization
-			auth_response = self._s_auth.verify_authorize_w_response(Actions.USERS_GET_ALL, request.header.token)
+			auth_response = self._s_auth.authorize(Action.USERS_GET_ALL, request.user)
 			if not isinstance(auth_response, responses.OKEmpty):
 				return auth_response
 
-			# Query
-			login_filter = None if json is None else json.get("login")
-			result = self._m_users.get_all(login_filter)
+			# Since login is private.
+			# # Validation
+			# json = request.body
+			# json_validator = validation.Json(True, True, True, not self._strict_requests, [
+			# 	validation.Json.Key("login", True, validation.String(False, orm.Users.LOGIN_LEN_MIN, orm.Users.LOGIN_LEN_MAX))
+			# ])
+			# try:
+			# 	json_validator.validate(json)
+			# except validation.Error as ve:
+			# 	return responses.Unprocessable({"json": ve.errors})
+			# # Query
+			# login_filter = None if json is None else json.get("login")
+			# result = self._m_users.get_all(login_filter)
+
+			result = self._m_users.get_all()
 			return responses.OK(result)
 		except SQLAlchemyError as sqlae:
 			return responses.DatabaseException(sqlae)
@@ -115,6 +117,7 @@ class Users:
 			json = request.body
 			json_validator = validation.Json(False, False, False, not self._strict_requests, [
 				validation.Json.Key("user_id", False, validation.Integer(False)),
+				validation.Json.Key("role", False, validation.Integer(False)),
 				validation.Json.Key("login", True, validation.String(False, orm.Users.LOGIN_LEN_MIN, orm.Users.LOGIN_LEN_MAX)),
 				validation.Json.Key("name", True, validation.String(False, orm.Users.NAME_LEN_MIN, orm.Users.NAME_LEN_MAX)),
 				validation.Json.Key("password", True, validation.String(False, orm.Users.PASSWORD_LEN_MIN, orm.Users.PASSWORD_LEN_MAX))
@@ -124,32 +127,24 @@ class Users:
 			except validation.Error as ve:
 				return responses.Unprocessable({"json": ve.errors})
 
-			# Token verification (so that the token isn't re-verified on every authorization)
-			token = None
-			if request.header.token is not None:
-				verify_response = self._s_auth.verify_w_response(request.header.token)
-				if not isinstance(verify_response, responses.OK):
-					return verify_response
-				token = verify_response.object
-
 			# Authorization
-			auth_response = self._s_auth.authorize_w_response(Actions.USERS_UPDATE, token, json["user_id"])
+			auth_response = self._s_auth.authorize(Action.USERS_UPDATE, request.user, json["user_id"])
 			if not isinstance(auth_response, responses.OKEmpty):
 				return auth_response
 			# Authorization (certain attributes)
 			if "name" in json:
-				# Authorize role change (admin and user only)
-				auth_response = self._s_auth.authorize_w_response(Actions.USERS_UPDATE_NAME, token, json["user_id"])
+				# Authorize name change
+				auth_response = self._s_auth.authorize(Action.USERS_UPDATE_NAME, request.user, json["user_id"])
 				if not isinstance(auth_response, responses.OKEmpty):
 					return auth_response
 			if "role" in json:
-				# Authorize role change (admin only)
-				auth_response = self._s_auth.authorize_w_response(Actions.USERS_UPDATE_ROLE, token)
+				# Authorize role change
+				auth_response = self._s_auth.authorize(Action.USERS_UPDATE, request.user, None)
 				if not isinstance(auth_response, responses.OKEmpty):
 					return auth_response
 			if "login" in json or "password" in json:
-				# Authorize credential change (user only)
-				auth_response = self._s_auth.authorize_w_response(Actions.USERS_UPDATE_CREDENTIALS, token, json["user_id"])
+				# Authorize credential change
+				auth_response = self._s_auth.authorize(Action.USERS_UPDATE_CREDENTIALS, request.user, json["user_id"])
 				if not isinstance(auth_response, responses.OKEmpty):
 					return auth_response
 
@@ -185,7 +180,7 @@ class Users:
 				return responses.Unprocessable({"json": ve.errors})
 
 			# Authorization
-			auth_response = self._s_auth.verify_authorize_w_response(Actions.USERS_DELETE, request.header.token, json["user_id"])
+			auth_response = self._s_auth.authorize(Action.USERS_DELETE, request.user, json["user_id"])
 			if not isinstance(auth_response, responses.OKEmpty):
 				return auth_response
 

@@ -69,14 +69,14 @@ class Unauthorized(_Errors):
 		super().__init__(HTTPStatus.UNAUTHORIZED, errors)
 
 
-class Forbidden(_Errors):
-	def __init__(self, errors: 'TH_ERRORS'):
-		super().__init__(HTTPStatus.FORBIDDEN, errors)
+class Forbidden(_Empty):
+	def __init__(self):
+		super().__init__(HTTPStatus.FORBIDDEN)
 
 
-class BadRequest(_Errors):
-	def __init__(self, errors: 'TH_ERRORS'):
-		super().__init__(HTTPStatus.BAD_REQUEST, errors)
+# class BadRequest(_Errors):
+# 	def __init__(self, errors: 'TH_ERRORS'):
+# 		super().__init__(HTTPStatus.BAD_REQUEST, errors)
 
 
 class Unprocessable(_Errors):
@@ -93,10 +93,10 @@ class Conflict(_Errors):
 	def __init__(self, errors: 'TH_ERRORS'):
 		super().__init__(HTTPStatus.CONFLICT, errors)
 
-
-class MethodNotAllowed(_Errors):
-	def __init__(self, errors: 'TH_ERRORS'):
-		super().__init__(HTTPStatus.METHOD_NOT_ALLOWED, errors)
+#
+# class MethodNotAllowed(_Errors):
+# 	def __init__(self, errors: 'TH_ERRORS'):
+# 		super().__init__(HTTPStatus.METHOD_NOT_ALLOWED, errors)
 # endregion 4xx Client error
 
 

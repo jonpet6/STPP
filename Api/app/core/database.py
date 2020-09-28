@@ -52,12 +52,10 @@ class Database:
 		-------
 		sqlalchemy.exc.SQLAlchemyError
 		"""
-		print("scope begin")
 		self._session.begin(subtransactions=True)
 		try:
 			yield self._session
+			self._session.commit()
 		except SQLAlchemyError:
 			self._session.rollback()
 			raise
-		finally:
-			self._session.commit()

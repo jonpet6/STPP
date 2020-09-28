@@ -2,6 +2,8 @@ import typing
 if typing.TYPE_CHECKING:
 	from core.database import Database as th_Database
 
+from sqlalchemy import or_
+
 from models import orm
 
 
@@ -27,11 +29,11 @@ class RoomsUsers:
 		sqlalchemy.orm.exc.NoResultFound
 			RoomsUsers with (room_id, user_id) doesn't exist
 		sqlalchemy.orm.exc.MultipleResultsFound
-			(room_id, user_id) pair is not unique in RoomsUsers
+			room_id and user_id pair is not unique in RoomsUsers
 		sqlalchemy.exc.SQLAlchemyError
 		"""
 		with self._database.scope as scope:
-			return scope.query(orm.RoomsUsers).one((room_id, user_id))
+			return scope.query(orm.RoomsUsers).filter(orm.RoomsUsers.room_id == room_id, orm.RoomsUsers.user_id == user_id).one()
 
 	def get_all(self, room_id_filter: int = None, user_id_filter: int = None) -> typing.List[orm.RoomsUsers]:
 		"""
@@ -55,11 +57,11 @@ class RoomsUsers:
 		"""
 		with self._database.scope as scope:
 			query = scope.query(orm.RoomsUsers).filter(
-				orm.RoomsUsers.room_id.in_(
-					# All rooms which have the user_id in them
-					scope.query(orm.RoomsUsers.room_id).filter(
-						orm.RoomsUsers.user_id == user_id
-					).all()
+				or_(
+					# Rooms in which the user is participating
+					orm.RoomsUsers.room_id == scope.query(orm.RoomsUsers.room_id).filter(orm.RoomsUsers.user_id == user_id),
+					# Rooms which the user is the owner of
+					orm.RoomsUsers.room_id == scope.query(orm.Rooms).filter(orm.Rooms.user_id == user_id)
 				)
 			)
 			if room_id_filter is not None:
