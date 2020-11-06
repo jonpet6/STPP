@@ -2,7 +2,7 @@ import typing
 if typing.TYPE_CHECKING:
 	TH_ERRORS = typing.Union[str, dict, typing.List[typing.Union[str, dict]]]
 
-import traceback
+import logging
 import flask
 from http import HTTPStatus
 
@@ -33,7 +33,7 @@ class _Object(Response):
 		return flask.jsonify(self.object), self.code
 
 
-class _Errors(Response):
+class Errors(Response):
 	def __init__(self, code: int, errors: 'TH_ERRORS'):
 		super().__init__(code)
 		self.errors = errors if type(errors) is list else [errors]
@@ -53,6 +53,11 @@ class OK(_Object):
 		super().__init__(HTTPStatus.OK, obj)
 
 
+class Created(_Empty):
+	def __init__(self):
+		super().__init__(HTTPStatus.CREATED)
+
+
 class OKEmpty(_Empty):
 	def __init__(self):
 		super().__init__(HTTPStatus.NO_CONTENT)
@@ -64,7 +69,7 @@ class OKEmpty(_Empty):
 
 
 # region 4xx Client error
-class Unauthorized(_Errors):
+class Unauthorized(Errors):
 	def __init__(self, errors: 'TH_ERRORS'):
 		super().__init__(HTTPStatus.UNAUTHORIZED, errors)
 
@@ -79,17 +84,17 @@ class Forbidden(_Empty):
 # 		super().__init__(HTTPStatus.BAD_REQUEST, errors)
 
 
-class Unprocessable(_Errors):
+class Unprocessable(Errors):
 	def __init__(self, errors: 'TH_ERRORS'):
 		super().__init__(HTTPStatus.UNPROCESSABLE_ENTITY, errors)
 
 
-class NotFound(_Errors):
+class NotFound(Errors):
 	def __init__(self, errors: 'TH_ERRORS'):
 		super().__init__(HTTPStatus.NOT_FOUND, errors)
 
 
-class Conflict(_Errors):
+class Conflict(Errors):
 	def __init__(self, errors: 'TH_ERRORS'):
 		super().__init__(HTTPStatus.CONFLICT, errors)
 
@@ -101,19 +106,14 @@ class Conflict(_Errors):
 
 
 # region 5xx Server error
-class InternalError(_Errors):
+class InternalError(Errors):
 	def __init__(self, errors: 'TH_ERRORS'):
 		super().__init__(HTTPStatus.INTERNAL_SERVER_ERROR, errors)
 
 
-class InternalException(_Errors):
+class InternalException(Errors):
 	def __init__(self, exception: Exception, errors: 'TH_ERRORS'):
-		# TODO log exception
-		print("===================================================")
-		print(type(exception))
-		print(exception)
-		traceback.print_stack()
-		print("===================================================")
+		logging.exception(f"{str(exception)}\n{str(errors)}")
 		super().__init__(HTTPStatus.INTERNAL_SERVER_ERROR, errors)
 
 

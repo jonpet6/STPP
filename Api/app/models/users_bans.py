@@ -33,7 +33,7 @@ class UsersBans:
 		sqlalchemy.exc.SQLAlchemyError
 		"""
 		with self._database.scope as scope:
-			return scope.query(orm.UsersBans).filter(orm.UsersBans.id == user_id).one()
+			return scope.query(orm.UsersBans).filter(orm.UsersBans.user_id == user_id).one()
 
 	def get_all(self, user_id_filter: int = None, banner_id_filter: int = None) -> typing.List[orm.UsersBans]:
 		"""

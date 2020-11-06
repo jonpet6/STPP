@@ -23,6 +23,21 @@ class Validator:
 			raise Error("Is none")
 
 
+class Boolean(Validator):
+	def __init__(self, allow_none: bool):
+		super().__init__(allow_none)
+
+	def validate(self, obj: typing.Any = None) -> None:
+		if obj is None:
+			if self._allow_none:
+				return
+			else:
+				raise Error("Is none")
+
+		if type(obj) is not bool:
+			raise Error("Invalid type")
+
+
 class Integer(Validator):
 	def __init__(self, allow_none: bool = False, minimum: int = None, maximum: int = None):
 		super().__init__(allow_none)
@@ -37,7 +52,10 @@ class Integer(Validator):
 				raise Error("Is none")
 
 		if type(obj) is not int:
-			raise Error("Invalid type")
+			try:
+				int(obj)
+			except ValueError:
+				raise Error("Invalid type")
 
 		errors = []
 

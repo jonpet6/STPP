@@ -1,17 +1,19 @@
 import datetime
 import getpass
 import sys
-
+# External
 import argon2
 import click
 import flask
 import flask.json
+import werkzeug
 import isodate
 import sqlalchemy.exc
 # Core
 import core.config
 import core.database
 import core.auth.jwt
+import core.responses
 # Models
 import models.rooms_bans
 import models.rooms_users
@@ -29,7 +31,7 @@ import controllers.users
 import controllers.users_bans
 import controllers.rooms
 import controllers.rooms_bans
-import controllers.rooms_users as c_ru		# Pycharm broke
+import controllers.rooms_users as c_ru  # Pycharm broke
 import controllers.posts
 # Routes
 import routes.login
@@ -37,17 +39,26 @@ import routes.users
 import routes.users_bans
 import routes.rooms
 import routes.rooms_bans
-import routes.rooms_users as r_ru
+import routes.rooms_users as r_ru  # Pycharm broke
 import routes.posts
 
 
 # Ensures ISO-8601 datetime in json
 class AppJsonEncoder(flask.json.JSONEncoder):
 	""" https://stackoverflow.com/q/43663552 """
+
 	def default(self, o):
 		if isinstance(o, datetime.date):
 			return o.isoformat()
 		return super().default(o)
+
+
+# Ensures JSON instead of an html error page
+def handle_exception(e):
+	return core.responses.Errors(e.code, {
+				"name": e.name,
+				"description": e.description
+			}).to_flask()
 
 
 def main():
@@ -74,15 +85,17 @@ def main():
 	s_auth = services.auth.Auth()
 	# Controllers
 	c_login = controllers.login.Login(m_users, s_auth, password_hasher, private_key, strict_requests)
-	c_users = controllers.users.Users(m_users, s_auth, password_hasher, strict_requests)
+	c_users = controllers.users.Users(m_users, m_users_bans, s_auth, password_hasher, strict_requests)
 	c_users_bans = controllers.users_bans.UsersBans(m_users_bans, s_auth, strict_requests)
-	c_rooms = controllers.rooms.Rooms(m_rooms, m_rooms_users, s_auth, strict_requests)
-	c_rooms_bans = controllers.rooms_bans.RoomsBans(m_rooms_bans, m_rooms, s_auth, strict_requests)
-	c_rooms_users = c_ru.RoomsUsers(m_rooms_users, m_rooms, s_auth, strict_requests)
-	c_posts = controllers.posts.Posts(m_posts, m_rooms, m_rooms_users, s_auth, strict_requests)
+	c_rooms = controllers.rooms.Rooms(m_rooms, m_rooms_bans, m_rooms_users, s_auth, strict_requests)
+	c_rooms_bans = controllers.rooms_bans.RoomsBans(m_rooms_bans, m_rooms, m_rooms_users, s_auth, strict_requests)
+	c_rooms_users = c_ru.RoomsUsers(m_rooms_users, m_rooms, m_rooms_bans, s_auth, strict_requests)
+	c_posts = controllers.posts.Posts(m_posts, m_rooms, m_rooms_users, m_rooms_bans, s_auth, strict_requests)
 	# Api
 	app = flask.Flask(__name__)
-	app.json_encoder = AppJsonEncoder 
+	app.json_encoder = AppJsonEncoder
+	# noinspection PyProtectedMember,PyTypeChecker
+	app._register_error_handler(None, werkzeug.exceptions.HTTPException, handle_exception)
 	# Set up routes
 	app.register_blueprint(routes.login.init(c_login, s_request))
 	app.register_blueprint(routes.users.init(c_users, s_request))
@@ -92,7 +105,7 @@ def main():
 	app.register_blueprint(r_ru.init(c_rooms_users, s_request))
 	app.register_blueprint(routes.posts.init(c_posts, s_request))
 	# Start the app
-	app.run(port=cfg[cfg.APP_PORT], debug=cfg[cfg.APP_DEBUG])
+	app.run(port=cfg[cfg.APP_PORT], debug=cfg[cfg.APP_DEBUG], threaded=True)
 
 
 def connect_db(cfg: core.config.Config) -> core.database.Database:

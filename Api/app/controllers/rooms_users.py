@@ -2,6 +2,7 @@ import typing
 if typing.TYPE_CHECKING:
 	from models.rooms_users import RoomsUsers as th_m_RoomsUsers
 	from models.rooms import Rooms as th_m_Rooms
+	from models.rooms_bans import RoomsBans as th_m_RoomsBans
 	from core.request import Request as th_Request
 	from services.auth import Auth as th_s_Auth
 
@@ -15,9 +16,10 @@ from core.auth.action import Action
 
 
 class RoomsUsers:
-	def __init__(self, m_rooms_users: 'th_m_RoomsUsers', m_rooms: 'th_m_Rooms', s_auth: 'th_s_Auth', strict_requests: bool = None):
-		self._m_rooms = m_rooms
+	def __init__(self, m_rooms_users: 'th_m_RoomsUsers', m_rooms: 'th_m_Rooms', m_rooms_bans: 'th_m_RoomsBans', s_auth: 'th_s_Auth', strict_requests: bool = None):
 		self._m_rooms_users = m_rooms_users
+		self._m_rooms = m_rooms
+		self._m_rooms_bans = m_rooms_bans
 		self._s_auth = s_auth
 		self._strict_requests = strict_requests
 
@@ -50,7 +52,7 @@ class RoomsUsers:
 			# Query
 			try:
 				self._m_rooms_users.create(json["room_id"], json["user_id"])
-				return responses.OKEmpty()
+				return responses.Created()
 			except IntegrityError:
 				return responses.NotFound({"user_id": ["User does not exist"]})
 		except SQLAlchemyError as sqlae:
@@ -76,23 +78,30 @@ class RoomsUsers:
 				return responses.NotFound({"room_id": ["Room with room_id doesn't exist"]})
 			except MultipleResultsFound as mrf:
 				return responses.InternalException(mrf, {"room_id": ["Not unique"]})
-			# Which users can access this method
-			orm_room_users = self._m_rooms_users.get_all(room_id_filter=orm_room.id)
+			orm_room_users = self._m_rooms_users.get_all_by_room(orm_room.id)
+			orm_room_ban = None
+			try:
+				orm_room_ban = self._m_rooms_bans.get(json["room_id"])
+			except NoResultFound:
+				# Room is not banned
+				pass
+			except MultipleResultsFound as mrf:
+				return responses.InternalException(mrf, {"room_id": ["Not unique"]})
 
 			# Authorization
-			allowed_ids = [orm_room.user_id] + [orm_room_user.user_id for orm_room_user in orm_room_users]
-			auth_response = self._s_auth.authorize(Action.ROOMS_USERS_GET, request.user, allowed_ids)
+			if orm_room_ban is not None:
+				auth_response = self._s_auth.authorize(Action.ROOMS_ACCESS_BANNED, request.user, orm_room.user_id)
+				if not isinstance(auth_response, responses.OKEmpty):
+					return auth_response
+			auth_response = self._s_auth.authorize(
+				Action.ROOMS_ACCESS_PUBLIC if orm_room.is_public else Action.ROOMS_ACCESS_PRIVATE,
+				request.user,
+				[orm_room.user_id] + [orm_room_user.user_id for orm_room_user in orm_room_users]
+			)
 			if not isinstance(auth_response, responses.OKEmpty):
 				return auth_response
 
-			# Query
-			try:
-				result = self._m_rooms_users.get(json["room_id"], json["user_id"])
-				return responses.OK(result)
-			except NoResultFound:
-				return responses.NotFound({"user_id": ["User with room_id doesn't exist"]})
-			except MultipleResultsFound as mrf:
-				return responses.InternalException(mrf, [{"user_id": ["Not unique"]}])
+			return responses.OK(orm_room_users)
 		except SQLAlchemyError as sqlae:
 			return responses.DatabaseException(sqlae)
 
@@ -112,24 +121,34 @@ class RoomsUsers:
 			room_id_filter = None if json is None else json.get("room_id")
 			user_id_filter = None if json is None else json.get("user_id")
 
-			# Authorization (get all)
-			auth_response = self._s_auth.authorize(Action.ROOMS_USERS_GET_ALL, request.user)
+			# Authorization
+			auth_response = self._s_auth.authorize(Action.ROOMS_USERS_ACCESS, request.user)
 			if isinstance(auth_response, responses.OKEmpty):
-				result = self._m_rooms_users.get_all(room_id_filter, user_id_filter)
+				result = self._m_rooms_bans.get_all(False, False, None, room_id_filter, user_id_filter)
 				return responses.OK(result)
-
-			# Authorization (get visible)
-			auth_response = self._s_auth.authorize(Action.ROOMS_USERS_GET_VISIBLE, request.user)
-			if isinstance(auth_response, responses.OKEmpty):
-				if isinstance(request.user, Registered):
-					result = self._m_rooms_users.get_all_visible(request.user.user_id, room_id_filter, user_id_filter)
-					return responses.OK(result)
-				else:
-					# TODO CAN STILL VIEW?
-					# An unregistered user cannot create nor participate in a private room
-					return responses.OK([])
 			else:
-				return auth_response
+				# Filters by authorization
+				user_id = None
+				if isinstance(request.user, Registered):
+					user_id = request.user.user_id
+
+				exclude_public = True
+				auth_response = self._s_auth.authorize(Action.ROOMS_ACCESS_PUBLIC, request.user)
+				if isinstance(auth_response, responses.OKEmpty):
+					exclude_public = False
+
+				exclude_private = True
+				auth_response = self._s_auth.authorize(Action.ROOMS_ACCESS_PRIVATE, request.user)
+				if isinstance(auth_response, responses.OKEmpty):
+					exclude_private = False
+
+				exclude_banned = True
+				auth_response = self._s_auth.authorize(Action.ROOMS_ACCESS_BANNED, request.user)
+				if isinstance(auth_response, responses.OKEmpty):
+					exclude_banned = False
+
+				result = self._m_rooms_users.get_all(exclude_banned, exclude_public, exclude_private, user_id, room_id_filter, user_id_filter)
+				return responses.OK(result)
 		except SQLAlchemyError as sqlae:
 			return responses.DatabaseException(sqlae)
 
@@ -158,7 +177,7 @@ class RoomsUsers:
 				return responses.InternalException(mrf, {"room_id": ["Not unique"]})
 
 			# Authorization
-			auth_response = self._s_auth.authorize(Action.USERS_BANS_CREATE, request.user, orm_room.user_id)
+			auth_response = self._s_auth.authorize(Action.ROOMS_USERS_DELETE, request.user, orm_room.user_id)
 			if not isinstance(auth_response, responses.OKEmpty):
 				return auth_response
 

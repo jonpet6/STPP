@@ -26,6 +26,14 @@ def init(c_users: 'th_c_Users', s_request: 'th_s_Request') -> flask.Blueprint:
 		request = request_response.object
 		return c_users.create(request).to_flask()
 
+	@bp_users.route("/users", methods=["DELETE"])
+	def delete_self():
+		request_response = s_request.from_flask(flask.request)
+		if not isinstance(request_response, responses.OK):
+			return request_response.to_flask()
+		request = request_response.object
+		return c_users.delete_self(request).to_flask()
+
 	@bp_users.route("/users/<int:user_id>", methods=["GET"])
 	def get(user_id: int) -> flask.Response:
 		request_response = s_request.from_flask(flask.request, {"user_id": user_id})

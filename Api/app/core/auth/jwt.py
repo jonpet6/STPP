@@ -116,14 +116,13 @@ class Token:
 			payload = dacite.from_dict(_Payload, _decode_dict(payload_str.encode(_STRING_ENCODING)))
 		except json.JSONDecodeError:
 			errors.append("Payload is not a dict")
-		except dacite.DaciteError as e:
-			errors.append(str(e))		# TODO?
-
-		signature = _decode_bytes(signature_str.encode(_STRING_ENCODING))
+		except dacite.DaciteError:
+			errors.append("Payload is invalid")
 
 		if errors:
 			raise Error(errors)
 		else:
+			signature = _decode_bytes(signature_str.encode(_STRING_ENCODING))
 			# noinspection PyUnboundLocalVariable
 			return Token(header, payload, signature)
 

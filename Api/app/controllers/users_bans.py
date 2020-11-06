@@ -31,7 +31,7 @@ class UsersBans:
 			json = request.body
 			json_validator = validation.Json(False, False, False, not self._strict_requests, [
 				validation.Json.Key("user_id", False, validation.Integer(False)),
-				validation.Json.Key("banner_id", False, validation.Integer(False)),
+				validation.Json.Key("banner_id", True, validation.Integer(False)),
 				validation.Json.Key("reason", False, validation.String(False, orm.UsersBans.REASON_LEN_MIN, orm.UsersBans.REASON_LEN_MAX))
 			])
 			try:
@@ -39,9 +39,17 @@ class UsersBans:
 			except validation.Error as ve:
 				return responses.Unprocessable({"json": ve.errors})
 
+			if isinstance(request.user, Registered):
+				banner_id = request.user.user_id
+			else:
+				banner_id = json.get("banner_id")
+				if banner_id is None:
+					return responses.Unprocessable({"json": [{"banner_id": ["Missing"]}]})
+
 			# Query
 			try:
-				self._m_users_bans.create(json["user_id"], json["banner_id"], json["reason"])
+				self._m_users_bans.create(json["user_id"], banner_id, json["reason"])
+				return responses.Created()
 			except IntegrityError:
 				return responses.NotFound({"user_id": ["User does not exist"]})
 		except SQLAlchemyError as sqlae:
@@ -63,12 +71,12 @@ class UsersBans:
 			try:
 				orm_user_ban = self._m_users_bans.get(json["user_id"])
 			except NoResultFound:
-				return responses.NotFound({"user_id": ["UsersBans with user_id doesn't"]})
+				return responses.NotFound({"user_id": ["UsersBans with user_id doesn't exist"]})
 			except MultipleResultsFound as mrf:
 				return responses.InternalException(mrf, {"user_id": ["user_id is not unique"]})
 
 			# Authorization
-			auth_response = self._s_auth.authorize(Action.USERS_BANS_GET, request.user, [orm_user_ban.user_id, orm_user_ban.banner_id])
+			auth_response = self._s_auth.authorize(Action.USERS_ACCESS_BANNED, request.user, [orm_user_ban.user_id, orm_user_ban.banner_id])
 			if not isinstance(auth_response, responses.OKEmpty):
 				return auth_response
 
@@ -77,7 +85,7 @@ class UsersBans:
 				result = self._m_users_bans.get(json["user_id"])
 				return responses.OK(result)
 			except NoResultFound:
-				return responses.NotFound({"user_id": ["UsersBans with user_id doesn't"]})
+				return responses.NotFound({"user_id": ["UsersBans with user_id doesn't exist"]})
 			except MultipleResultsFound as mrf:
 				return responses.InternalException(mrf, {"user_id": ["user_id is not unique"]})
 		except SQLAlchemyError as sqlae:
@@ -99,23 +107,20 @@ class UsersBans:
 			user_id_filter = None if json is None else json.get("user_id")
 			banner_id_filter = None if json is None else json.get("banner_id")
 
-			# Authorization (get all)
-			auth_response = self._s_auth.authorize(Action.USERS_BANS_GET_ALL, request.user)
+			# Authorization
+			auth_response = self._s_auth.authorize(Action.USERS_ACCESS_BANNED, request.user)
 			if isinstance(auth_response, responses.OKEmpty):
+				# Can access all bans
 				result = self._m_users_bans.get_all(user_id_filter, banner_id_filter)
 				return responses.OK(result)
-
-			# Authorization (get visible)
-			auth_response = self._s_auth.authorize(Action.USERS_BANS_GET_ALL_VISIBLE, request.user)
-			if isinstance(auth_response, responses.OKEmpty):
+			else:
+				# Can only access visible bans
 				if isinstance(request.user, Registered):
 					result = self._m_users_bans.get_all_visible(request.user.user_id, user_id_filter, banner_id_filter)
 					return responses.OK(result)
 				else:
-					# An unregistered user cannot get banned nor create bans
+					# An unregsitered user cannot get banned nor create bans
 					return responses.OK([])
-			else:
-				return auth_response
 		except SQLAlchemyError as sqlae:
 			return responses.DatabaseException(sqlae)
 
@@ -136,7 +141,7 @@ class UsersBans:
 			try:
 				orm_user_ban = self._m_users_bans.get(json["user_id"])
 			except NoResultFound:
-				return responses.NotFound({"user_id": ["UsersBans with user_id doesn't"]})
+				return responses.NotFound({"user_id": ["UsersBans with user_id doesn't exist"]})
 			except MultipleResultsFound as mrf:
 				return responses.InternalException(mrf, {"user_id": ["user_id is not unique"]})
 
@@ -150,7 +155,7 @@ class UsersBans:
 				self._m_users_bans.update(json["user_id"], json.get("reason"))
 				return responses.OKEmpty()
 			except NoResultFound:
-				return responses.NotFound({"user_id": ["UsersBans with user_id doesn't"]})
+				return responses.NotFound({"user_id": ["UsersBans with user_id doesn't exist"]})
 			except MultipleResultsFound as mrf:
 				return responses.InternalException(mrf, {"user_id": ["user_id is not unique"]})
 		except SQLAlchemyError as sqlae:
@@ -172,12 +177,12 @@ class UsersBans:
 			try:
 				orm_user_ban = self._m_users_bans.get(json["user_id"])
 			except NoResultFound:
-				return responses.NotFound({"user_id": ["UsersBans with user_id doesn't"]})
+				return responses.NotFound({"user_id": ["UsersBans with user_id doesn't exist"]})
 			except MultipleResultsFound as mrf:
 				return responses.InternalException(mrf, {"user_id": ["user_id is not unique"]})
 
 			# Authorization
-			auth_response = self._s_auth.authorize(Action.USERS_BANS_GET, request.user, orm_user_ban.banner_id)
+			auth_response = self._s_auth.authorize(Action.USERS_BANS_DELETE, request.user, orm_user_ban.banner_id)
 			if not isinstance(auth_response, responses.OKEmpty):
 				return auth_response
 
@@ -186,7 +191,7 @@ class UsersBans:
 				self._m_users_bans.delete(json["user_id"])
 				return responses.OKEmpty()
 			except NoResultFound:
-				return responses.NotFound({"user_id": ["UsersBans with user_id doesn't"]})
+				return responses.NotFound({"user_id": ["UsersBans with user_id doesn't exist"]})
 			except MultipleResultsFound as mrf:
 				return responses.InternalException(mrf, {"user_id": ["user_id is not unique"]})
 		except SQLAlchemyError as sqlae:

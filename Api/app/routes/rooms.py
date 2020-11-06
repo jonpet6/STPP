@@ -1,4 +1,7 @@
 import typing
+
+from core.auth.user import Registered
+
 if typing.TYPE_CHECKING:
 	from controllers.rooms import Rooms as th_c_Rooms
 	from services.request import Request as th_s_Request
@@ -20,31 +23,31 @@ def init(c_rooms: 'th_c_Rooms', s_request: 'th_s_Request') -> flask.Blueprint:
 
 	@bp_rooms.route("/rooms", methods=["POST"])
 	def create() -> flask.Response:
-		request_response = s_request.from_flask(flask.request)
+		request_response = s_request.from_flask(flask.request, None)
 		if not isinstance(request_response, responses.OK):
 			return request_response.to_flask()
 		request = request_response.object
 		return c_rooms.create(request).to_flask()
 
-	@bp_rooms.route("/rooms/<int:user_id>", methods=["GET"])
-	def get(user_id: int) -> flask.Response:
-		request_response = s_request.from_flask(flask.request, {"user_id": user_id})
+	@bp_rooms.route("/rooms/<int:room_id>", methods=["GET"])
+	def get(room_id: int) -> flask.Response:
+		request_response = s_request.from_flask(flask.request, {"room_id": room_id})
 		if not isinstance(request_response, responses.OK):
 			return request_response.to_flask()
 		request = request_response.object
 		return c_rooms.get(request).to_flask()
 
-	@bp_rooms.route("/rooms/<int:user_id>", methods=["PATCH"])
-	def update(user_id: int) -> flask.request:
-		request_response = s_request.from_flask(flask.request, {"user_id": user_id})
+	@bp_rooms.route("/rooms/<int:room_id>", methods=["PATCH"])
+	def update(room_id: int) -> flask.request:
+		request_response = s_request.from_flask(flask.request, {"room_id": room_id})
 		if not isinstance(request_response, responses.OK):
 			return request_response.to_flask()
 		request = request_response.object
 		return c_rooms.update(request).to_flask()
 
-	@bp_rooms.route("/rooms/<int:user_id>", methods=["DELETE"])
-	def delete(user_id: int) -> flask.request:
-		request_response = s_request.from_flask(flask.request, {"user_id": user_id})
+	@bp_rooms.route("/rooms/<int:room_id>", methods=["DELETE"])
+	def delete(room_id: int) -> flask.request:
+		request_response = s_request.from_flask(flask.request, {"room_id": room_id})
 		if not isinstance(request_response, responses.OK):
 			return request_response.to_flask()
 		request = request_response.object

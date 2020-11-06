@@ -24,17 +24,26 @@ class Request:
 
 		# header = request.Header(token=token)
 
-		data = flask_request.get_data()
-		if len(data) < 1:
-			body = None
+		if flask_request.method == "GET":
+			body = flask_request.args.to_dict()
+			# Convert str to int, if int
+			for key in body:
+				try:
+					body[key] = int(body[key])
+				except ValueError:
+					pass
 		else:
-			try:
-				body = json.loads(data.decode("utf-8"))
-			except json.JSONDecodeError:
-				if self._strict_requests:
-					return responses.Unprocessable({"json": ["Corrupt"]})
-				else:
-					body = None
+			data = flask_request.get_data()
+			if len(data) < 1:
+				body = None
+			else:
+				try:
+					body = json.loads(data.decode("utf-8"))
+				except json.JSONDecodeError:
+					if self._strict_requests:
+						return responses.Unprocessable({"json": ["Corrupt"]})
+					else:
+						body = None
 
 		if additional_json is not None:
 			if body is None:

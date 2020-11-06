@@ -1,4 +1,5 @@
 import typing
+
 if typing.TYPE_CHECKING:
 	from core.auth.action import Action as th_Action
 	from core.auth.user import User as th_User
@@ -9,8 +10,17 @@ from core.auth.user import Registered
 
 class Auth:
 	# noinspection PyMethodMayBeStatic
-	def authorize(self, action: 'th_Action', user: 'th_User', allowed_ids: typing.Union[int, typing.List[int]] = None) -> responses.Response:
-		if action in user.role.actions:
+	def authorize(
+			self,
+			actions: typing.Union['th_Action', typing.List['th_Action']],
+			user: 'th_User',
+			allowed_ids: typing.Union[int, typing.List[int]] = None
+		) -> responses.Response:
+
+		if not isinstance(actions, list):
+			actions = [actions]
+
+		if all([action in user.role.actions for action in actions]):
 			return responses.OKEmpty()
 
 		if not isinstance(user, Registered):

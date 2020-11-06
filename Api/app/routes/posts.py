@@ -26,25 +26,25 @@ def init(c_posts: 'th_c_Posts', s_request: 'th_s_Request') -> flask.Blueprint:
 		request = request_response.object
 		return c_posts.create(request).to_flask()
 
-	@bp_posts.route("/posts/<int:user_id>", methods=["GET"])
-	def get(user_id: int) -> flask.Response:
-		request_response = s_request.from_flask(flask.request, {"user_id": user_id})
+	@bp_posts.route("/posts/<int:post_id>", methods=["GET"])
+	def get(post_id: int) -> flask.Response:
+		request_response = s_request.from_flask(flask.request, {"post_id": post_id})
 		if not isinstance(request_response, responses.OK):
 			return request_response.to_flask()
 		request = request_response.object
 		return c_posts.get(request).to_flask()
 
-	@bp_posts.route("/posts/<int:user_id>", methods=["PATCH"])
-	def update(user_id: int) -> flask.request:
-		request_response = s_request.from_flask(flask.request, {"user_id": user_id})
+	@bp_posts.route("/posts/<int:post_id>", methods=["PATCH"])
+	def update(post_id: int) -> flask.request:
+		request_response = s_request.from_flask(flask.request, {"post_id": post_id})
 		if not isinstance(request_response, responses.OK):
 			return request_response.to_flask()
 		request = request_response.object
 		return c_posts.update(request).to_flask()
 
-	@bp_posts.route("/posts/<int:user_id>", methods=["DELETE"])
-	def delete(user_id: int) -> flask.request:
-		request_response = s_request.from_flask(flask.request, {"user_id": user_id})
+	@bp_posts.route("/posts/<int:post_id>", methods=["DELETE"])
+	def delete(post_id: int) -> flask.request:
+		request_response = s_request.from_flask(flask.request, {"post_id": post_id})
 		if not isinstance(request_response, responses.OK):
 			return request_response.to_flask()
 		request = request_response.object

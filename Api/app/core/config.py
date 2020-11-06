@@ -1,3 +1,4 @@
+import sys
 import typing
 from configparser import ConfigParser
 from pathlib import Path
@@ -30,10 +31,18 @@ class Config:
 	_filepath: Path = None
 	_parser: ConfigParser = None
 
-	def __init__(self, directory: str, name: str):
-		self._filepath = Path(directory).joinpath(f"{name}.ini")
-		self._parser = ConfigParser()
-		if self._filepath.exists():
+	def __init__(self, directory: str = None, name: str = None):
+		if directory is None:
+			directory = sys.path[0]
+		if name is None:
+			name = "config"
+
+		self._directory = Path(directory)
+		self._filepath = self._directory.joinpath(f"{name}.ini")
+		if not self._filepath.exists():
+			raise FileNotFoundError
+		else:
+			self._parser = ConfigParser()
 			self._parser.read(self._filepath)
 
 	def __getitem__(self, item: _Setting) -> typing.Any:

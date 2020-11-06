@@ -35,20 +35,60 @@ class RoomsUsers:
 		with self._database.scope as scope:
 			return scope.query(orm.RoomsUsers).filter(orm.RoomsUsers.room_id == room_id, orm.RoomsUsers.user_id == user_id).one()
 
-	def get_all(self, room_id_filter: int = None, user_id_filter: int = None) -> typing.List[orm.RoomsUsers]:
+	def get_all_by_room(self, room_id: int) -> typing.List[orm.RoomsUsers]:
 		"""
 		Raises
 		-------
 		sqlalchemy.exc.SQLAlchemyError
 		"""
 		with self._database.scope as scope:
-			query = scope.query(orm.RoomsUsers)
+			return scope.query(orm.RoomsUsers).filter(orm.RoomsUsers.room_id == room_id).all()
+
+	def get_all(self, exclude_banned_rooms: bool, exclude_public: bool, exclude_private: bool, user_id: int = None, room_id_filter: int = None, user_id_filter: int = None):
+		with self._database.scope as scope:
+			q_visible_ids = []
+			if user_id is not None:
+				q_visible_ids = scope.query(orm.RoomsUsers).filter(
+					or_(
+						# RoomsUsers of which the room is owned by user
+						orm.RoomsUsers.room_id.in_(
+							scope.query(orm.Rooms.id).filter(orm.Rooms.user_id == user_id)
+						),
+						# RoomsUsers of which the user is the user
+						orm.RoomsUsers.user_id == user_id
+					)
+				)
+
+			q_filtered_ids = scope.query(orm.RoomsUsers)
+			if exclude_banned_rooms:
+				q_filtered_ids = q_filtered_ids.filter(
+					orm.RoomsUsers.room_id.notin_(scope.query(orm.RoomsBans.room_id))
+				)
+			if exclude_public:
+				q_filtered_ids = q_filtered_ids.filter(
+					orm.RoomsUsers.room_id.notin_(
+						scope.query(orm.Rooms.id).filter(orm.Rooms.is_public.is_(True))
+					)
+				)
+			if exclude_private:
+				q_filtered_ids = q_filtered_ids.filter(
+					orm.RoomsUsers.room_id.notin_(
+						scope.query(orm.Rooms.id).filter(orm.Rooms.is_public.is_(False))
+					)
+				)
+
+			query = scope.query(orm.RoomsUsers).filter(
+				or_(
+					orm.RoomsUsers.room_id.in_(q_visible_ids),
+					orm.RoomsUsers.room_id.in_(q_filtered_ids)
+				)
+			)
 			if room_id_filter is not None:
 				query = query.filter(orm.RoomsUsers.room_id == room_id_filter)
 			if user_id_filter is not None:
 				query = query.filter(orm.RoomsUsers.user_id == user_id_filter)
 			return query.all()
-
+	
 	def get_all_visible(self, user_id: int, room_id_filter: int = None, user_id_filter: int = None) -> typing.List[orm.RoomsUsers]:
 		"""
 		Raises

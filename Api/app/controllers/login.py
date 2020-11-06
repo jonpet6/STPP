@@ -6,6 +6,7 @@ if typing.TYPE_CHECKING:
 	from argon2 import PasswordHasher as th_PasswordHasher
 	from cryptography.hazmat.primitives.asymmetric.rsa import RSAPrivateKey as th_RSAPrivateKey
 
+import logging
 
 from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.orm.exc import NoResultFound, MultipleResultsFound
@@ -69,11 +70,10 @@ class Login:
 					self._m_users.update(user.id, passhash=passhash_new)
 				except (HashingError, SQLAlchemyError, NoResultFound, MultipleResultsFound) as err:
 					# Not crucial
-					# TODO log
-					print(err)
+					logging.exception(err)
 
 			# Generate and return token
 			token = jwt.Token.generate(jwt.Claims(user.id), self._private_key, user.passhash)
-			return responses.OK(token.to_string())
+			return responses.OK({"token": token.to_string()})
 		except SQLAlchemyError as sqlae:
 			return responses.DatabaseException(sqlae)

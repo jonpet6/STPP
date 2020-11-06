@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
-from sqlalchemy import Column, DateTime, ForeignKey, Integer, SmallInteger, Text, FetchedValue
+from sqlalchemy import Column, DateTime, ForeignKey, Integer, SmallInteger, Text, Boolean, FetchedValue
 from sqlalchemy.ext.declarative import declarative_base
 
 
@@ -51,6 +51,7 @@ class Rooms(Base):
 	id: Integer.python_type = Column(Integer, primary_key=True)
 	user_id: Integer.python_type = Column(ForeignKey(Users.id), primary_key=True)
 	date_created: DateTime.python_type = Column(DateTime, nullable=False, server_default=FetchedValue())
+	is_public: Boolean.python_type = Column(Boolean, nullable=False)
 	title: Text.python_type = Column(Text, nullable=False)
 
 	TITLE_LEN_MIN = 1

@@ -26,20 +26,19 @@ def init(c_rooms_users: 'th_c_RoomsUsers', s_request: 'th_s_Request') -> flask.B
 		request = request_response.object
 		return c_rooms_users.create(request).to_flask()
 
-	@bp_rooms_users.route("/rooms/users/<int:user_id>", methods=["GET"])
-	def get(user_id: int) -> flask.Response:
-		request_response = s_request.from_flask(flask.request, {"user_id": user_id})
-		if not isinstance(request_response, responses.OK):
-			return request_response.to_flask()
-		request = request_response.object
-		return c_rooms_users.get(request).to_flask()
+	# @bp_rooms_users.route("/rooms/users/<int:user_id>", methods=["GET"])
+	# def get(user_id: int) -> flask.Response:
+	# 	request_response = s_request.from_flask(flask.request, {"user_id": user_id})
+	# 	if not isinstance(request_response, responses.OK):
+	# 		return request_response.to_flask()
+	# 	request = request_response.object
+	# 	return c_rooms_users.get(request).to_flask()
 
-	@bp_rooms_users.route("/rooms/users/<int:user_id>", methods=["DELETE"])
-	def delete(user_id: int) -> flask.request:
-		request_response = s_request.from_flask(flask.request, {"user_id": user_id})
+	@bp_rooms_users.route("/rooms/users", methods=["DELETE"])
+	def delete() -> flask.request:
+		request_response = s_request.from_flask(flask.request)
 		if not isinstance(request_response, responses.OK):
 			return request_response.to_flask()
 		request = request_response.object
 		return c_rooms_users.delete(request).to_flask()
-
 	return bp_rooms_users

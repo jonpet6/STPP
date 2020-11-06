@@ -16,52 +16,31 @@ class Roles:
 		return Roles.id_to_role(id_)
 
 	GUEST = Role(actions=[
-		# Login
 		Action.LOGIN,
-		# Users
 		Action.USERS_CREATE,
-		Action.USERS_GET,
-		Action.USERS_GET_ALL,
-		# Users bans
-		Action.USERS_BANS_GET,
-		Action.USERS_BANS_GET_ALL,
-		# Rooms
-		Action.ROOMS_GET_PUBLIC,
-		Action.ROOMS_BANS_GET_ALL_VISIBLE,
-		# Rooms users
-		# -
-		# Rooms bans
-		Action.ROOMS_BANS_GET,
-		Action.ROOMS_BANS_GET_ALL_VISIBLE,
-		# Posts
-		Action.POSTS_GET_ALL_VISIBLE
+		Action.USERS_ACCESS_NOTBANNED,
+		Action.ROOMS_ACCESS_PUBLIC,
 	])
 
 	USER = Role(actions=GUEST.actions + [
-		Action.POSTS_CREATE_PUBLIC
+		Action.ROOMS_CREATE,
+		Action.POSTS_CREATE_PUBLIC,
+		Action.USERS_ACCESS_NOTBANNED,
+		Action.USERS_DELETE_SELF
 	])
 
-	ADMIN = Role(actions=GUEST.actions + [
-		# Users
+	ADMIN = Role(actions=USER.actions + [
 		Action.USERS_UPDATE_NAME,
 		Action.USERS_UPDATE_ROLE,
-		Action.USERS_DELETE,
-		# Users bans
 		Action.USERS_BANS_CREATE,
-		# Rooms
-		Action.ROOMS_GET,
-		Action.ROOMS_GET_ALL,
-		Action.ROOMS_UPDATE,
-		# Rooms users
-		Action.ROOMS_USERS_GET,
-		Action.ROOMS_USERS_GET_ALL,
-		# Rooms bans
+		Action.ROOMS_UPDATE_TITLE,
 		Action.ROOMS_BANS_CREATE,
-		# Posts,
-		Action.POSTS_CREATE,
-		Action.POSTS_GET,
-		Action.POSTS_GET_ALL,
-		Action.POSTS_DELETE
+		Action.POSTS_CLEAR,
+		Action.POSTS_DELETE,
+
+		Action.USERS_ACCESS_BANNED,
+		Action.ROOMS_ACCESS_PRIVATE,
+		Action.ROOMS_ACCESS_BANNED,
 	])
 
 	# region Internal

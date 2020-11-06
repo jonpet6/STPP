@@ -43,7 +43,6 @@ class Users:
 		sqlalchemy.exc.SQLAlchemyError
 		"""
 		with self._database.scope as scope:
-			print(user_id)
 			return scope.query(orm.Users).filter(orm.Users.id == user_id).one()
 
 	def get_by_login(self, login: str) -> orm.Users:
@@ -70,6 +69,32 @@ class Users:
 			if login_filter is not None:
 				query = query.filter(orm.Users.login == login_filter)
 			return query.all()
+
+	def get_all_unbanned(self) -> typing.List[orm.Users]:
+		"""
+		Raises
+		-------
+		sqlalchemy.exc.SQLAlchemyError
+		"""
+		with self._database.scope as scope:
+			return scope.query(orm.Users).filter(
+				orm.Users.id.notin_(
+					scope.query(orm.UsersBans.user_id)
+				)
+			).all()
+
+	def get_all_banned(self) -> typing.List[orm.Users]:
+		"""
+		Raises
+		-------
+		sqlalchemy.exc.SQLAlchemyError
+		"""
+		with self._database.scope as scope:
+			return scope.query(orm.Users).filter(
+				orm.Users.id.in_(
+					scope.query(orm.UsersBans.user_id)
+				)
+			).all()
 
 	def update(self, user_id: int, role: int = None, login: str = None, name: str = None, passhash: str = None) -> None:
 		"""
@@ -110,5 +135,5 @@ class Users:
 			self._m_rooms_bans.delete_all(banner_id_filter=user_id)
 			self._m_rooms_users.delete_all(user_id_filter=user_id)
 			self._m_posts.delete_all(user_id_filter=user_id)
-			self._m_rooms.delete_all(creator_id_filter=user_id)
+			self._m_rooms.delete_all(user_id)
 			scope.delete(self.get(user_id))
