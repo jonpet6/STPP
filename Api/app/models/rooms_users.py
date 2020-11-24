@@ -45,7 +45,7 @@ class RoomsUsers:
 			return scope.query(orm.RoomsUsers).filter(orm.RoomsUsers.room_id == room_id).all()
 
 	def get_all(self, exclude_banned_rooms: bool, exclude_public: bool, exclude_private: bool, user_id: int = None, room_id_filter: int = None, user_id_filter: int = None):
-		with self._database.scope as scope:
+		with self._database.scope as scope:O
 			q_visible_ids = []
 			if user_id is not None:
 				q_visible_ids = scope.query(orm.RoomsUsers).filter(

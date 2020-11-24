@@ -1,46 +1,41 @@
 import datetime
 import getpass
 import sys
+
 # External
 import argon2
 import click
 import flask
 import flask.json
-import werkzeug
 import isodate
 import sqlalchemy.exc
-# Core
-import core.config
-import core.database
-import core.auth.jwt
-import core.responses
-# Models
-import models.rooms_bans
-import models.rooms_users
-import models.posts
-import models.rooms
-import models.users_bans
-import models.users
-# Services
-import services.users
-import services.request
-import services.auth
-# Controllers
+import werkzeug
+from flask_cors import CORS
+
 import controllers.login
-import controllers.users
-import controllers.users_bans
+import controllers.posts
 import controllers.rooms
 import controllers.rooms_bans
-import controllers.rooms_users as c_ru  # Pycharm broke
-import controllers.posts
-# Routes
-import routes.login
-import routes.users
-import routes.users_bans
-import routes.rooms
-import routes.rooms_bans
-import routes.rooms_users as r_ru  # Pycharm broke
-import routes.posts
+import controllers.rooms_users
+import controllers.users
+import controllers.users_bans
+import core.auth.jwt
+import core.config
+import core.database
+import core.responses
+import models.posts
+import models.rooms
+import models.rooms_bans
+import models.rooms_users
+import models.users
+import models.users_bans
+import routes.routes
+import services.auth
+import services.request
+import services.users
+
+
+# Core
 
 
 # Ensures ISO-8601 datetime in json
@@ -56,9 +51,8 @@ class AppJsonEncoder(flask.json.JSONEncoder):
 # Ensures JSON instead of an html error page
 def handle_exception(e):
 	return core.responses.Errors(e.code, {
-				"name": e.name,
-				"description": e.description
-			}).to_flask()
+		"description": e.description
+	}).to_flask()
 
 
 def main():
@@ -73,37 +67,32 @@ def main():
 	password_hasher = argon2.PasswordHasher()
 	database = connect_db(cfg)
 	# Models
-	m_rooms_bans = models.rooms_bans.RoomsBans(database)
-	m_rooms_users = models.rooms_users.RoomsUsers(database)
-	m_posts = models.posts.Posts(database)
-	m_rooms = models.rooms.Rooms(database, m_rooms_users, m_rooms_bans, m_posts)
-	m_users_bans = models.users_bans.UsersBans(database)
-	m_users = models.users.Users(database, m_users_bans, m_rooms, m_rooms_users, m_rooms_bans, m_posts)
+	m_rooms_bans	= models.rooms_bans.	RoomsBans(database)
+	m_rooms_users	= models.rooms_users.	RoomsUsers(database)
+	m_posts			= models.posts.			Posts(database)
+	m_rooms			= models.rooms.			Rooms(database, m_rooms_users, m_rooms_bans, m_posts)
+	m_users_bans	= models.users_bans.	UsersBans(database)
+	m_users			= models.users.			Users(database, m_users_bans, m_rooms, m_rooms_users, m_rooms_bans, m_posts)
 	# Services
-	s_users = services.users.Users(m_users, public_key, tokens_lifetime)
-	s_request = services.request.Request(s_users, strict_requests)
-	s_auth = services.auth.Auth()
+	s_users			= services.users.		Users(m_users, public_key, tokens_lifetime)
+	s_request		= services.request.		Request(s_users, strict_requests)
+	s_auth			= services.auth.		Auth()
 	# Controllers
-	c_login = controllers.login.Login(m_users, s_auth, password_hasher, private_key, strict_requests)
-	c_users = controllers.users.Users(m_users, m_users_bans, s_auth, password_hasher, strict_requests)
-	c_users_bans = controllers.users_bans.UsersBans(m_users_bans, s_auth, strict_requests)
-	c_rooms = controllers.rooms.Rooms(m_rooms, m_rooms_bans, m_rooms_users, s_auth, strict_requests)
-	c_rooms_bans = controllers.rooms_bans.RoomsBans(m_rooms_bans, m_rooms, m_rooms_users, s_auth, strict_requests)
-	c_rooms_users = c_ru.RoomsUsers(m_rooms_users, m_rooms, m_rooms_bans, s_auth, strict_requests)
-	c_posts = controllers.posts.Posts(m_posts, m_rooms, m_rooms_users, m_rooms_bans, s_auth, strict_requests)
-	# Api
+	c_login			= controllers.login.		Login(m_users, m_users_bans, s_auth, password_hasher, private_key, strict_requests)
+	c_users			= controllers.users.		Users(m_users, m_users_bans, s_auth, password_hasher, strict_requests)
+	c_users_bans	= controllers.users_bans.	UsersBans(m_users_bans, s_auth, strict_requests)
+	c_rooms			= controllers.rooms.		Rooms(m_rooms, m_rooms_bans, m_rooms_users, s_auth, strict_requests)
+	c_rooms_bans	= controllers.rooms_bans.	RoomsBans(m_rooms_bans, m_rooms, m_rooms_users, s_auth, strict_requests)
+	c_rooms_users	= controllers.rooms_users.	RoomsUsers(m_rooms_users, m_rooms, m_rooms_bans, s_auth, strict_requests)
+	c_posts			= controllers.posts.		Posts(m_posts, m_rooms, m_rooms_users, m_rooms_bans, s_auth, strict_requests)
+	# App
 	app = flask.Flask(__name__)
+	CORS(app)
 	app.json_encoder = AppJsonEncoder
 	# noinspection PyProtectedMember,PyTypeChecker
 	app._register_error_handler(None, werkzeug.exceptions.HTTPException, handle_exception)
 	# Set up routes
-	app.register_blueprint(routes.login.init(c_login, s_request))
-	app.register_blueprint(routes.users.init(c_users, s_request))
-	app.register_blueprint(routes.users_bans.init(c_users_bans, s_request))
-	app.register_blueprint(routes.rooms.init(c_rooms, s_request))
-	app.register_blueprint(routes.rooms_bans.init(c_rooms_bans, s_request))
-	app.register_blueprint(r_ru.init(c_rooms_users, s_request))
-	app.register_blueprint(routes.posts.init(c_posts, s_request))
+	app.register_blueprint(routes.routes.init(s_request, c_login, c_users, c_users_bans, c_rooms, c_rooms_bans, c_rooms_users, c_posts))
 	# Start the app
 	app.run(port=cfg[cfg.APP_PORT], debug=cfg[cfg.APP_DEBUG], threaded=True)
 

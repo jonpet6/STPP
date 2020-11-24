@@ -49,6 +49,8 @@ class Rooms:
 		sqlalchemy.exc.SQLAlchemyError
 		"""
 		with self._database.scope as scope:
+			return scope.query(orm.Rooms).all()
+			# TODO
 			q_visible_ids = None
 			if user_id is not None:
 				q_visible_ids = scope.query(orm.Rooms.id).filter(

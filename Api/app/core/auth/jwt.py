@@ -103,7 +103,7 @@ class Token:
 			header_str = string_split[0]
 			payload_str = string_split[1]
 			signature_str = string_split[2]
-		except KeyError:
+		except (KeyError, IndexError):
 			raise Error("Wrong token format")
 
 		errors = []

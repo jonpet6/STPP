@@ -35,7 +35,7 @@ class Users:
 		except NoResultFound:
 			return responses.Unauthorized({"token": ["Token's user does not exist"]})
 		except MultipleResultsFound as mrf:
-			return responses.InternalException(mrf, {"user_id": "Not unique"})
+			return responses.InternalException(mrf, {"user_id": ["Not unique"]})
 		except SQLAlchemyError as sqlae:
 			return responses.DatabaseException(sqlae)
 

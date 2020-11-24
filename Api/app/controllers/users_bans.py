@@ -5,11 +5,10 @@ if typing.TYPE_CHECKING:
 	from services.auth import Auth as th_s_Auth
 
 from sqlalchemy.exc import SQLAlchemyError, IntegrityError
-from sqlalchemy.orm.exc import NoResultFound, MultipleResultsFound
+from sqlalchemy.orm.exc import NoResultFound
 
 from models import orm
-from core import responses
-from core import validation
+from core import responses, validation
 from core.auth.user import Registered
 from core.auth.action import Action
 
@@ -21,93 +20,70 @@ class UsersBans:
 		self._strict_requests = strict_requests
 
 	def create(self, request: 'th_Request') -> responses.Response:
+		validator = validation.Dict({
+			"user_id": validation.Integer(),
+			"reason": validation.String(length_min=orm.UsersBans.REASON_LEN_MIN, length_max=orm.UsersBans.REASON_LEN_MAX)
+		}, allow_undefined_keys=not self._strict_requests)
 		try:
+			# Validation
+			try: validator.validate(request.body)
+			except validation.Error as ve: return responses.Unprocessable(ve.errors)
+
 			# Authorization
 			auth_response = self._s_auth.authorize(Action.USERS_BANS_CREATE, request.user)
-			if not isinstance(auth_response, responses.OKEmpty):
-				return auth_response
+			if not isinstance(auth_response, responses.OKEmpty): return auth_response
 
-			# Validation
-			json = request.body
-			json_validator = validation.Json(False, False, False, not self._strict_requests, [
-				validation.Json.Key("user_id", False, validation.Integer(False)),
-				validation.Json.Key("banner_id", True, validation.Integer(False)),
-				validation.Json.Key("reason", False, validation.String(False, orm.UsersBans.REASON_LEN_MIN, orm.UsersBans.REASON_LEN_MAX))
-			])
-			try:
-				json_validator.validate(json)
-			except validation.Error as ve:
-				return responses.Unprocessable({"json": ve.errors})
-
-			if isinstance(request.user, Registered):
-				banner_id = request.user.user_id
-			else:
-				banner_id = json.get("banner_id")
-				if banner_id is None:
-					return responses.Unprocessable({"json": [{"banner_id": ["Missing"]}]})
+			# Get the user's ID from request (Which gets it's user info from a token)
+			if not isinstance(request.user, Registered): return responses.UnauthorizedNotLoggedIn()
+			user: Registered = request.user
 
 			# Query
 			try:
-				self._m_users_bans.create(json["user_id"], banner_id, json["reason"])
+				self._m_users_bans.create(request.body["user_id"], user.user_id, request.body["reason"])
 				return responses.Created()
-			except IntegrityError:
-				return responses.NotFound({"user_id": ["User does not exist"]})
+			except IntegrityError: return responses.NotFoundByID("user_id")
 		except SQLAlchemyError as sqlae:
 			return responses.DatabaseException(sqlae)
 
 	def get(self, request: 'th_Request') -> responses.Response:
+		validator = validation.Dict({
+			"user_id": validation.Integer()
+		}, allow_undefined_keys=not self._strict_requests)
 		try:
 			# Validation
-			json = request.body
-			json_validator = validation.Json(False, False, False, not self._strict_requests, [
-				validation.Json.Key("user_id", False, validation.Integer(False))
-			])
-			try:
-				json_validator.validate(json)
-			except validation.Error as ve:
-				return responses.Unprocessable({"json": ve.errors})
+			try: validator.validate(request.body)
+			except validation.Error as ve: return responses.Unprocessable(ve.errors)
+
+			user_id = request.body["user_id"]
 
 			# Query for authorization
-			try:
-				orm_user_ban = self._m_users_bans.get(json["user_id"])
-			except NoResultFound:
-				return responses.NotFound({"user_id": ["UsersBans with user_id doesn't exist"]})
-			except MultipleResultsFound as mrf:
-				return responses.InternalException(mrf, {"user_id": ["user_id is not unique"]})
+			try: orm_user_ban = self._m_users_bans.get(user_id)
+			except NoResultFound: return responses.NotFoundByID("user_id")
 
 			# Authorization
 			auth_response = self._s_auth.authorize(Action.USERS_ACCESS_BANNED, request.user, [orm_user_ban.user_id, orm_user_ban.banner_id])
-			if not isinstance(auth_response, responses.OKEmpty):
-				return auth_response
+			if not isinstance(auth_response, responses.OKEmpty): return auth_response
 
-			# Query
-			try:
-				result = self._m_users_bans.get(json["user_id"])
-				return responses.OK(result)
-			except NoResultFound:
-				return responses.NotFound({"user_id": ["UsersBans with user_id doesn't exist"]})
-			except MultipleResultsFound as mrf:
-				return responses.InternalException(mrf, {"user_id": ["user_id is not unique"]})
+			return responses.OK(orm_user_ban)
 		except SQLAlchemyError as sqlae:
 			return responses.DatabaseException(sqlae)
 
 	def get_all(self, request: 'th_Request') -> responses.Response:
+		validator = validation.Dict({
+			"user_id": validation.Integer(allow_none=True),
+			"banner_id": validation.Integer(allow_none=True),
+		}, allow_none=True, allow_empty=True, allow_all_defined_keys_missing=True, allow_undefined_keys=not self._strict_requests)
 		try:
 			# Validation
-			json = request.body
-			json_validator = validation.Json(True, True, True, not self._strict_requests, [
-				validation.Json.Key("user_id", True, validation.Integer(False)),
-				validation.Json.Key("banner_id", True, validation.Integer(False))
-			])
-			try:
-				json_validator.validate(json)
-			except validation.Error as ve:
-				return responses.Unprocessable({"json": ve.errors})
+			try: validator.validate(request.body)
+			except validation.Error as ve: return responses.Unprocessable(ve.errors)
+
 			# Filters
-			user_id_filter = None if json is None else json.get("user_id")
-			banner_id_filter = None if json is None else json.get("banner_id")
+			user_id_filter = None if request.body is None else request.body.get("user_id")
+			banner_id_filter = None if request.body is None else request.body.get("banner_id")
 
 			# Authorization
+			# TODO check whatever is going on here
 			auth_response = self._s_auth.authorize(Action.USERS_ACCESS_BANNED, request.user)
 			if isinstance(auth_response, responses.OKEmpty):
 				# Can access all bans
@@ -125,74 +101,57 @@ class UsersBans:
 			return responses.DatabaseException(sqlae)
 
 	def update(self, request: 'th_Request') -> responses.Response:
+		validator = validation.Dict({
+			"user_id": validation.Integer(),
+			"reason": validation.String(length_min=orm.UsersBans.REASON_LEN_MIN, length_max=orm.UsersBans.REASON_LEN_MAX)
+		}, allow_undefined_keys=not self._strict_requests)
 		try:
 			# Validation
-			json = request.body
-			json_validator = validation.Json(False, False, False, not self._strict_requests, [
-				validation.Json.Key("user_id", False, validation.Integer(False)),
-				validation.Json.Key("reason", False, validation.String(False, orm.UsersBans.REASON_LEN_MIN, orm.UsersBans.REASON_LEN_MAX))
-			])
-			try:
-				json_validator.validate(json)
-			except validation.Error as ve:
-				return responses.Unprocessable({"json": ve.errors})
+			try: validator.validate(request.body)
+			except validation.Error as ve: return responses.Unprocessable(ve.errors)
+
+			user_id = request.body["user_id"]
 
 			# Query for authorization
-			try:
-				orm_user_ban = self._m_users_bans.get(json["user_id"])
-			except NoResultFound:
-				return responses.NotFound({"user_id": ["UsersBans with user_id doesn't exist"]})
-			except MultipleResultsFound as mrf:
-				return responses.InternalException(mrf, {"user_id": ["user_id is not unique"]})
+			try: orm_user_ban = self._m_users_bans.get(user_id)
+			except NoResultFound: return responses.NotFoundByID("user_id")
 
 			# Authorization
 			auth_response = self._s_auth.authorize(Action.USERS_BANS_UPDATE, request.user, orm_user_ban.banner_id)
-			if not isinstance(auth_response, responses.OKEmpty):
-				return auth_response
+			if not isinstance(auth_response, responses.OKEmpty): return auth_response
 
 			# Query
 			try:
-				self._m_users_bans.update(json["user_id"], json.get("reason"))
+				self._m_users_bans.update(user_id, request.body["reason"])
 				return responses.OKEmpty()
-			except NoResultFound:
-				return responses.NotFound({"user_id": ["UsersBans with user_id doesn't exist"]})
-			except MultipleResultsFound as mrf:
-				return responses.InternalException(mrf, {"user_id": ["user_id is not unique"]})
+			except NoResultFound: return responses.NotFoundByID("user_id")
 		except SQLAlchemyError as sqlae:
 			return responses.DatabaseException(sqlae)
 
 	def delete(self, request: 'th_Request') -> responses.Response:
+		validator = validation.Dict({
+			"user_id": validation.Integer()
+		}, allow_undefined_keys=not self._strict_requests)
 		try:
 			# Validation
-			json = request.body
-			json_validator = validation.Json(False, False, False, not self._strict_requests, [
-				validation.Json.Key("user_id", False, validation.Integer(False))
-			])
-			try:
-				json_validator.validate(json)
-			except validation.Error as ve:
-				return responses.Unprocessable({"json": ve.errors})
+			try: validator.validate(request.body)
+			except validation.Error as ve: return responses.Unprocessable(ve.errors)
+
+			user_id = request.body["user_id"]
 
 			# Query for authorization
 			try:
-				orm_user_ban = self._m_users_bans.get(json["user_id"])
-			except NoResultFound:
-				return responses.NotFound({"user_id": ["UsersBans with user_id doesn't exist"]})
-			except MultipleResultsFound as mrf:
-				return responses.InternalException(mrf, {"user_id": ["user_id is not unique"]})
+				orm_user_ban = self._m_users_bans.get(user_id)
+			except NoResultFound: return responses.NotFoundByID("user_id")
 
 			# Authorization
 			auth_response = self._s_auth.authorize(Action.USERS_BANS_DELETE, request.user, orm_user_ban.banner_id)
-			if not isinstance(auth_response, responses.OKEmpty):
-				return auth_response
+			if not isinstance(auth_response, responses.OKEmpty): return auth_response
 
 			# Query
 			try:
-				self._m_users_bans.delete(json["user_id"])
+				self._m_users_bans.delete(user_id)
 				return responses.OKEmpty()
-			except NoResultFound:
-				return responses.NotFound({"user_id": ["UsersBans with user_id doesn't exist"]})
-			except MultipleResultsFound as mrf:
-				return responses.InternalException(mrf, {"user_id": ["user_id is not unique"]})
+			except NoResultFound: return responses.NotFoundByID("user_id")
 		except SQLAlchemyError as sqlae:
 			return responses.DatabaseException(sqlae)

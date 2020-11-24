@@ -1,89 +1,98 @@
 import typing
-if typing.TYPE_CHECKING:
-	from core.responses import TH_ERRORS
 
 
 class Error(Exception):
-	def __init__(self, errors: 'TH_ERRORS'):
+	def __init__(self, errors: typing.Union[typing.List, typing.Dict, str]):
 		super().__init__()
-		self.errors = errors if type(errors) is list else [errors]
+		self.errors = errors if isinstance(errors, list) or isinstance(errors, dict) else [errors]
 
 
-class Validator:
-	def __init__(self, allow_none: bool = False):
-		self._allow_none = allow_none
+# region Common
+def _register_errors(error_dict: typing.Dict[str, typing.List[str]], key: str, error: typing.Union[str, typing.List[str]]):
+	if key not in error_dict:
+		error_dict[key] = []
+	if isinstance(error, list):
+		error_dict[key] += error
+	else:
+		error_dict[key].append(error)
+# endregion
+
+
+class _Validator:
+	def __init__(self, value_type: typing.Type, allow_none: bool = False):
+		self._value_type = value_type
+		self.allow_none = allow_none
+		self.name = self.__class__.__name__.lower()
+
+	def _assert_type(self, obj):
+		obj_type = type(obj)
+		if obj_type is not self._value_type:
+			raise Error(f"Wrong type: {obj_type.__name__}, expected {self._value_type.__name__}")
 
 	def validate(self, obj: typing.Any = None) -> None:
 		"""
 		Raises
 		-------
-		ValidationError
+		Error
 		"""
-		if not self._allow_none:
-			raise Error("Is none")
+		raise NotImplementedError()
 
 
-class Boolean(Validator):
-	def __init__(self, allow_none: bool):
-		super().__init__(allow_none)
+class Boolean(_Validator):
+	def __init__(self, allow_none: bool = False):
+		super().__init__(bool, allow_none)
 
 	def validate(self, obj: typing.Any = None) -> None:
+		# Check none
 		if obj is None:
-			if self._allow_none:
-				return
-			else:
+			if not self.allow_none:
 				raise Error("Is none")
+			return
+		# Check type
+		self._assert_type(obj)
 
-		if type(obj) is not bool:
-			raise Error("Invalid type")
 
-
-class Integer(Validator):
+class Integer(_Validator):
 	def __init__(self, allow_none: bool = False, minimum: int = None, maximum: int = None):
-		super().__init__(allow_none)
+		super().__init__(int, allow_none)
 		self._minimum = minimum
 		self._maximum = maximum
 
 	def validate(self, obj: typing.Any = None) -> None:
+		# Check none
 		if obj is None:
-			if self._allow_none:
-				return
-			else:
+			if not self.allow_none:
 				raise Error("Is none")
-
-		if type(obj) is not int:
-			try:
-				int(obj)
-			except ValueError:
-				raise Error("Invalid type")
+			return
+		# Check type
+		self._assert_type(obj)
 
 		errors = []
 
 		if self._minimum is not None and obj < self._minimum:
-			errors.append(f"Smaller than {self._minimum}")
+			errors.append(f"Less than {self._minimum}")
 
 		if self._maximum is not None and obj > self._maximum:
-			errors.append(f"Larger than {self._maximum}")
+			errors.append(f"Greater than {self._maximum}")
 
 		if len(errors) > 0:
 			raise Error(errors)
 
 
-class String(Validator):
+class String(_Validator):
 	def __init__(self, allow_none: bool = False, length_min: int = None, length_max: int = None):
-		super().__init__(allow_none)
+		super().__init__(str, allow_none)
 		self._length_min = length_min
 		self._length_max = length_max
 
 	def validate(self, obj: typing.Any = None) -> None:
+		# Check none
 		if obj is None:
-			if self._allow_none:
-				return
-			else:
+			if not self.allow_none:
 				raise Error("Is none")
-
-		if type(obj) is not str:
-			raise Error("Invalid type")
+			return
+		# Check type
+		self._assert_type(obj)
 
 		errors = []
 
@@ -97,64 +106,78 @@ class String(Validator):
 			raise Error(errors)
 
 
-class Json(Validator):
-	class Key:
-		def __init__(self, name: str, allow_missing: bool, validator: Validator):
-			self.name = name
-			self.allow_missing = allow_missing
-			self.validator = validator
-
-	def __init__(self, allow_none: bool = False, allow_empty: bool = False,
-					allow_all_defined_keys_missing: bool = False, allow_undefined_keys: bool = False, keys: typing.List[Key] = None):
-		super().__init__(allow_none)
+class Dict(_Validator):
+	def __init__(
+					self,
+					defined: typing.Dict[str, _Validator],
+					allow_none: bool = False, allow_empty: bool = False,
+					allow_all_defined_keys_missing: bool = False, allow_undefined_keys: bool = False,
+				):
+		"""
+		Parameters
+		----------
+		defined Defined keys and their validators
+		allow_none	Is it okay if the dict is null?
+		allow_empty	Is it okay if the dict contains no keys at all?
+		allow_all_defined_keys_missing Is it okay if all defined keys are missing?
+		allow_undefined_keys Is it okay if the dict contains undefined keys?
+		"""
+		super().__init__(dict, allow_none)
+		self._defined = defined
 		self._allow_empty = allow_empty
 		self._allow_all_defined_keys_missing = allow_all_defined_keys_missing
 		self._allow_undefined_keys = allow_undefined_keys
-		self._keys = keys
 
 	def validate(self, obj: typing.Any = None) -> None:
+		# Check none
 		if obj is None:
-			if self._allow_none:
-				return
-			else:
-				raise Error("Is none")
-
-		if type(obj) is not dict:
-			raise Error("Invalid type")
-
+			if not self.allow_none:
+				raise Error("Is none or corrupt")
+			return
+		# Check type
+		self._assert_type(obj)
+		# Check empty
 		if len(obj) < 1:
-			if self._allow_empty:
-				return obj
-			else:
+			if not self._allow_empty:
 				raise Error("Empty")
+			return
 
-		errors = []
+		missing_keys_count: int = 0
+		undefined_keys: typing.Set[str] = set()
+		key_errors: typing.Dict[str, list] = {}
 
-		# Check for undefined keys
-		json_keys_set = set(obj.keys())
-		defined_keys_set = set([jsonvkey.name for jsonvkey in self._keys])
-		# Check for undefined keys
-		if not self._allow_undefined_keys and len(json_keys_set.difference(defined_keys_set)) > 0:
-			errors.append("Contains undefined keys")
+		# Check if defined keys are missing
+		for key, validator in self._defined.items():
+			if key not in obj:
+				missing_keys_count += 1
+				if not validator.allow_none:
+					_register_errors(key_errors, key, "Missing")
 
-		missing_keys = []
-
-		# Validate all defined keys
-		for key in self._keys:
+		# Go through each value in given dict
+		for key, value in obj.items():
+			# Check if key is defined
 			try:
-				value = obj[key.name]
+				validator = self._defined[key]
+				# Key is defined, check if valid
 				try:
-					key.validator.validate(value)
+					validator.validate(value)
 				except Error as ve:
-					errors.append({key.name: ve.errors})
+					_register_errors(key_errors, key, ve.errors)
 			except KeyError:
-				missing_keys.append(key)
-				if not key.allow_missing:
-					errors.append({key.name: "Missing"})
+				# Undefined key
+				undefined_keys.add(key)
 
-		# Check if all defined keys were missing
-		if not self._allow_all_defined_keys_missing and len(missing_keys) == len(self._keys):
-			errors.append("Does not contain any defined keys")
+		# Check if there were undeifned keys
+		if not self._allow_undefined_keys and len(undefined_keys) != 0:
+			for key in undefined_keys:
+				_register_errors(key_errors, key, "Undefined")
+
+		errors = {}
+		if len(key_errors) > 0:
+			errors["keys"] = key_errors
+
+		if not self._allow_all_defined_keys_missing and missing_keys_count == len(self._defined):
+			errors["keys"] = {"All": "Missing"}
 
 		if len(errors) > 0:
 			raise Error(errors)

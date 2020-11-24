@@ -8,13 +8,13 @@ if typing.TYPE_CHECKING:
 
 from argon2.exceptions import HashingError
 from sqlalchemy.exc import SQLAlchemyError, IntegrityError
-from sqlalchemy.orm.exc import NoResultFound, MultipleResultsFound
+from sqlalchemy.orm.exc import NoResultFound
 
 from models import orm
-from core import responses
-from core import validation
+from core import responses, validation
 from core.auth.roles import Roles
 from core.auth.action import Action
+from core.auth.user import Registered
 
 
 class Users:
@@ -26,80 +26,69 @@ class Users:
 		self._strict_requests = strict_requests
 
 	def create(self, request: 'th_Request') -> responses.Response:
+		validator = validation.Dict({
+			"name": validation.String(length_min=orm.Users.NAME_LEN_MIN, length_max=orm.Users.NAME_LEN_MAX),
+			"login": validation.String(length_min=orm.Users.LOGIN_LEN_MIN, length_max=orm.Users.LOGIN_LEN_MAX),
+			"password": validation.String(length_min=orm.Users.PASSWORD_LEN_MIN, length_max=orm.Users.PASSWORD_LEN_MAX)
+		}, allow_undefined_keys=not self._strict_requests)
 		try:
 			# Authorization
 			auth_response = self._s_auth.authorize(Action.USERS_CREATE, request.user)
-			if not isinstance(auth_response, responses.OKEmpty):
-				return auth_response
+			if not isinstance(auth_response, responses.OKEmpty): return auth_response
 
 			# Validation
-			json = request.body
-			json_validator = validation.Json(False, False, False, not self._strict_requests, [
-				validation.Json.Key("login", False, validation.String(False, orm.Users.LOGIN_LEN_MIN, orm.Users.LOGIN_LEN_MAX)),
-				validation.Json.Key("name", False, validation.String(False, orm.Users.NAME_LEN_MIN, orm.Users.NAME_LEN_MAX)),
-				validation.Json.Key("password", False, validation.String(False, orm.Users.PASSWORD_LEN_MIN, orm.Users.PASSWORD_LEN_MAX))
-			])
-			try:
-				json_validator.validate(json)
-			except validation.Error as ve:
-				return responses.Unprocessable({"json": ve.errors})
+			try: validator.validate(request.body)
+			except validation.Error as ve: return responses.Unprocessable(ve.errors)
 
 			# Hash password
-			try:
-				passhash = self._password_hasher.hash(json["password"])
-			except HashingError as he:
-				return responses.InternalException(he, "Password could not be hashed")
+			try: passhash = self._password_hasher.hash(request.body["password"])
+			except HashingError as he: return responses.InternalException(he, {"password": ["Could not be hashed"]})
 
 			# Query
 			try:
-				self._m_users.create(Roles.USER.id_, json["login"], json["name"], passhash)
+				self._m_users.create(Roles.USER.id_, request.body["login"], request.body["name"], passhash)
 				return responses.Created()
 			except IntegrityError:
-				return responses.Conflict({"login": ["Not unique"]})
+				return responses.ConflictID("login")
 		except SQLAlchemyError as sqlae:
 			return responses.DatabaseException(sqlae)
 
 	def get(self, request: 'th_Request') -> responses.Response:
+		validator = validation.Dict({
+			"user_id": validation.Integer()
+		}, allow_undefined_keys=not self._strict_requests)
 		try:
 			# Validation
-			json = request.body
-			json_validator = validation.Json(False, False, False, not self._strict_requests, [
-				validation.Json.Key("user_id", False, validation.Integer(False))
-			])
-			try:
-				json_validator.validate(json)
-			except validation.Error as ve:
-				return responses.Unprocessable({"json": ve.errors})
+			try: validator.validate(request.body)
+			except validation.Error as ve: return responses.Unprocessable(ve.errors)
 
-			# Query for authorization
+			user_id = request.body["user_id"]
+
+			# Query to find the user
+			try: orm_user = self._m_users.get(user_id)
+			except NoResultFound: return responses.NotFoundByID("user_id")
+			# Check if user is banned
 			orm_user_ban = None
-			try:
-				orm_user_ban = self._m_users_bans.get(json["user_id"])
-			except NoResultFound:
-				# Ban does not exist
-				pass
-			except MultipleResultsFound as mrf:
-				return responses.InternalException(mrf, {"user_id": ["Not unique"]})
+			try: orm_user_ban = self._m_users_bans.get(user_id)
+			except NoResultFound: pass # User is not banned
 
-			# Authorization
+			# Authorization (can see banned users or not?)
 			auth_action = Action.USERS_ACCESS_NOTBANNED if orm_user_ban is None else Action.USERS_ACCESS_BANNED
-			auth_response = self._s_auth.authorize(auth_action, request.user, json["user_id"])
-			if not isinstance(auth_response, responses.OKEmpty):
-				return auth_response
+			auth_response = self._s_auth.authorize(auth_action, request.user, user_id)
+			if not isinstance(auth_response, responses.OKEmpty): return auth_response
 
-			# Query
-			try:
-				result = self._m_users.get(json["user_id"])
-				return responses.OK(result)
-			except NoResultFound:
-				return responses.NotFound({"user_id": ["User with user_id doesn't exist"]})
-			except MultipleResultsFound as mrf:
-				return responses.InternalException(mrf, {"login": ["Is not unique"]})
+			return responses.OK(orm_user)
 		except SQLAlchemyError as sqlae:
 			return responses.DatabaseException(sqlae)
 
 	def get_all(self, request: 'th_Request') -> responses.Response:
+		validator = validation.Dict({}, allow_none=True, allow_empty=True, allow_all_defined_keys_missing=True, allow_undefined_keys=not self._strict_requests)
+		# No keys since there's nothing to filter by (login is 'secret')
 		try:
+			# Validation
+			try: validator.validate(request.body)
+			except validation.Error as ve: return responses.Unprocessable(ve.errors)
+
 			auth_response = self._s_auth.authorize([Action.USERS_ACCESS_NOTBANNED, Action.USERS_ACCESS_BANNED], request.user)
 			if isinstance(auth_response, responses.OKEmpty):
 				# Can access all
@@ -123,114 +112,94 @@ class Users:
 			return responses.DatabaseException(sqlae)
 
 	def update(self, request: 'th_Request') -> responses.Response:
+		validator = validation.Dict({
+			"user_id": validation.Integer(),
+			"role": validation.Integer(allow_none=True),
+			"login": validation.String(allow_none=True, length_min=orm.Users.LOGIN_LEN_MIN, length_max=orm.Users.LOGIN_LEN_MAX),
+			"name":  validation.String(allow_none=True, length_min=orm.Users.NAME_LEN_MIN, length_max=orm.Users.NAME_LEN_MAX),
+			"password": validation.String(allow_none=True, length_min=orm.Users.PASSWORD_LEN_MIN, length_max=orm.Users.PASSWORD_LEN_MAX)
+		}, allow_undefined_keys=not self._strict_requests)
 		try:
 			# Validation
-			json = request.body
-			json_validator = validation.Json(False, False, False, not self._strict_requests, [
-				validation.Json.Key("user_id", False, validation.Integer(False)),
-				validation.Json.Key("role", True, validation.Integer(False)),
-				validation.Json.Key("login", True, validation.String(False, orm.Users.LOGIN_LEN_MIN, orm.Users.LOGIN_LEN_MAX)),
-				validation.Json.Key("name", True, validation.String(False, orm.Users.NAME_LEN_MIN, orm.Users.NAME_LEN_MAX)),
-				validation.Json.Key("password", True, validation.String(False, orm.Users.PASSWORD_LEN_MIN, orm.Users.PASSWORD_LEN_MAX))
-			])
-			try:
-				json_validator.validate(json)
-			except validation.Error as ve:
-				return responses.Unprocessable({"json": ve.errors})
+			try: validator.validate(request.body)
+			except validation.Error as ve: return responses.Unprocessable(ve.errors)
+
+			user_id = request.body["user_id"]
 
 			# Authorization (certain attributes)
-			if "name" in json:
+			if "name" in request.body:
 				# Authorize name change
-				auth_response = self._s_auth.authorize(Action.USERS_UPDATE_NAME, request.user, json["user_id"])
+				auth_response = self._s_auth.authorize(Action.USERS_UPDATE_NAME, request.user, user_id)
 				if not isinstance(auth_response, responses.OKEmpty):
 					return auth_response
-			if "role" in json:
+			if "role" in request.body:
 				# Authorize role change
 				auth_response = self._s_auth.authorize(Action.USERS_UPDATE_ROLE, request.user, None)
 				if not isinstance(auth_response, responses.OKEmpty):
 					return auth_response
-			if "login" in json or "password" in json:
+			if "login" in request.body or "password" in request.body:
 				# Authorize credential change
-				auth_response = self._s_auth.authorize(Action.USERS_UPDATE_CRED, request.user, json["user_id"])
+				auth_response = self._s_auth.authorize(Action.USERS_UPDATE_CRED, request.user, user_id)
 				if not isinstance(auth_response, responses.OKEmpty):
 					return auth_response
 
 			# Hash password
 			try:
-				passhash = None if "password" not in json else self._password_hasher.hash(json["password"])
+				passhash = None if "password" not in request.body else self._password_hasher.hash(request.body["password"])
 			except HashingError as he:
-				return responses.InternalException(he, "Password could not be hashed")
+				return responses.InternalException(he, {"password": ["Could not be hashed"]})
 
 			# Query
 			try:
-				self._m_users.update(json["user_id"], json.get("role"), json.get("login"), json.get("name"), passhash)
+				self._m_users.update(user_id, request.body.get("role"), request.body.get("login"), request.body.get("name"), passhash)
 				return responses.OKEmpty()
-			except IntegrityError:
-				return responses.Conflict({"login": ["Not unique"]})
-			except NoResultFound:
-				return responses.NotFound({"user_id": ["User with user_id doesn't exist"]})
-			except MultipleResultsFound as mrf:
-				return responses.InternalException(mrf, {"login": ["Not unique"]})
+			except IntegrityError: return responses.ConflictID("login")
+			except NoResultFound: return responses.NotFoundByID("user_id")
 		except SQLAlchemyError as sqlae:
 			return responses.DatabaseException(sqlae)
 
 	def delete(self, request: 'th_Request') -> responses.Response:
+		validator = validation.Dict({
+			"user_id": validation.Integer()
+		}, allow_undefined_keys=not self._strict_requests)
 		try:
 			# Validation
-			json = request.body
-			json_validator = validation.Json(False, False, False, not self._strict_requests, [
-				validation.Json.Key("user_id", False, validation.Integer(False))
-			])
-			try:
-				json_validator.validate(json)
-			except validation.Error as ve:
-				return responses.Unprocessable({"json": ve.errors})
+			try: validator.validate(request.body)
+			except validation.Error as ve: return responses.Unprocessable(ve.errors)
+
+			user_id = request.body["user_id"]
 
 			# Authorization
-			auth_response = self._s_auth.authorize(Action.USERS_DELETE, request.user, json["user_id"])
-			if not isinstance(auth_response, responses.OKEmpty):
-				return auth_response
-
-			# Query
-			try:
-				self._m_users.delete(json["user_id"])
-				return responses.OKEmpty()
-			except NoResultFound:
-				return responses.NotFound({"user_id": ["User with user_id doesn't exist"]})
-			except MultipleResultsFound as mrf:
-				return responses.InternalException(mrf, {"login": ["Not unique"]})
-		except SQLAlchemyError as sqlae:
-			return responses.DatabaseException(sqlae)
-
-	def delete_self(self, request: 'th_Request'):
-		try:
-			if self._strict_requests:
-				json = request.body
-				json_validator = validation.Json(True, True, False, False, [])
-				try:
-					json_validator.validate(json)
-				except validation.Error as ve:
-					return responses.Unprocessable({"json": ve.errors})
-
-			# Authorization
-			auth_response = self._s_auth.authorize(Action.USERS_DELETE_SELF, request.user)
-			if not isinstance(auth_response, responses.OKEmpty):
-				return auth_response
-
-			try:
-				# noinspection PyUnresolvedReferences
-				user_id = request.user.user_id
-			except AttributeError:
-				# Should never happen if authorization works right
-				return responses.Unauthorized({"token": ["Missing"]})
+			auth_response = self._s_auth.authorize(Action.USERS_DELETE, request.user, user_id)
+			if not isinstance(auth_response, responses.OKEmpty): return auth_response
 
 			# Query
 			try:
 				self._m_users.delete(user_id)
 				return responses.OKEmpty()
-			except NoResultFound:
-				return responses.NotFound({"user_id": ["User with user_id doesn't exist"]})
-			except MultipleResultsFound as mrf:
-				return responses.InternalException(mrf, {"login": ["Not unique"]})
+			except NoResultFound: return responses.NotFoundByID("user_id")
+		except SQLAlchemyError as sqlae:
+			return responses.DatabaseException(sqlae)
+
+	def delete_self(self, request: 'th_Request'):
+		validator = validation.Dict({}, allow_none=True, allow_empty=True, allow_all_defined_keys_missing=True, allow_undefined_keys=not self._strict_requests)
+		try:
+			# Validation
+			try: validator.validate(request.body)
+			except validation.Error as ve: return responses.Unprocessable(ve.errors)
+
+			# Authorization
+			auth_response = self._s_auth.authorize(Action.USERS_DELETE_SELF, request.user)
+			if not isinstance(auth_response, responses.OKEmpty): return auth_response
+
+			# Get the user's ID from request (Which gets it's user info from a token)
+			if not isinstance(request.user, Registered): return responses.UnauthorizedNotLoggedIn()
+			user: Registered = request.user
+
+			# Query
+			try:
+				self._m_users.delete(user.user_id)
+				return responses.OKEmpty()
+			except NoResultFound: return responses.NotFoundByID("user_id")
 		except SQLAlchemyError as sqlae:
 			return responses.DatabaseException(sqlae)

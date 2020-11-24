@@ -7,10 +7,9 @@ if typing.TYPE_CHECKING:
 	from services.auth import Auth as th_s_Auth
 
 from sqlalchemy.exc import SQLAlchemyError, IntegrityError
-from sqlalchemy.orm.exc import NoResultFound, MultipleResultsFound
+from sqlalchemy.orm.exc import NoResultFound
 
-from core import responses
-from core import validation
+from core import responses, validation
 from core.auth.user import Registered
 from core.auth.action import Action
 
@@ -24,130 +23,119 @@ class RoomsUsers:
 		self._strict_requests = strict_requests
 
 	def create(self, request: 'th_Request') -> responses.Response:
+		validator = validation.Dict({
+			"room_id": validation.Integer(),
+			"user_id": validation.Integer()
+		}, allow_undefined_keys=not self._strict_requests)
 		try:
 			# Validation
-			json = request.body
-			json_validator = validation.Json(False, False, False, not self._strict_requests, [
-				validation.Json.Key("room_id", False, validation.Integer(False)),
-				validation.Json.Key("user_id", False, validation.Integer(False))
-			])
-			try:
-				json_validator.validate(json)
-			except validation.Error as ve:
-				return responses.Unprocessable({"json": ve.errors})
+			try: validator.validate(request.body)
+			except validation.Error as ve: return responses.Unprocessable(ve.errors)
+
+			room_id = request.body["room_id"]
+			user_id = request.body["user_id"]
 
 			# Query for authorization
-			try:
-				orm_room = self._m_rooms.get(json["room_id"])
-			except NoResultFound:
-				return responses.NotFound({"room_id": ["Room with room_id doesn't exist"]})
-			except MultipleResultsFound as mrf:
-				return responses.InternalException(mrf, "room_id is not unique")
+			try: orm_room = self._m_rooms.get(room_id)
+			except NoResultFound: return responses.NotFoundByID("room_id")
 
 			# Authorization
 			auth_response = self._s_auth.authorize(Action.ROOMS_USERS_CREATE, request.user, orm_room.user_id)
-			if not isinstance(auth_response, responses.OKEmpty):
-				return auth_response
+			if not isinstance(auth_response, responses.OKEmpty): return auth_response
 
 			# Query
 			try:
-				self._m_rooms_users.create(json["room_id"], json["user_id"])
+				self._m_rooms_users.create(room_id, user_id)
 				return responses.Created()
-			except IntegrityError:
-				return responses.NotFound({"user_id": ["User does not exist"]})
+			except IntegrityError: return responses.NotFoundByID("user_id")
 		except SQLAlchemyError as sqlae:
 			return responses.DatabaseException(sqlae)
 
 	def get(self, request: 'th_Request') -> responses.Response:
+		validator = validation.Dict({
+			"room_id": validation.Integer(),
+			"user_id": validation.Integer()
+		}, allow_undefined_keys=not self._strict_requests)
 		try:
 			# Validation
-			json = request.body
-			json_validator = validation.Json(False, False, False, not self._strict_requests, [
-				validation.Json.Key("room_id", False, validation.Integer(False)),
-				validation.Json.Key("user_id", False, validation.Integer(False))
-			])
-			try:
-				json_validator.validate(json)
-			except validation.Error as ve:
-				return responses.Unprocessable({"json": ve.errors})
+			try: validator.validate(request.body)
+			except validation.Error as ve: return responses.Unprocessable(ve.errors)
 
-			# Query for authorization
-			try:
-				orm_room = self._m_rooms.get(json["room_id"])
-			except NoResultFound:
-				return responses.NotFound({"room_id": ["Room with room_id doesn't exist"]})
-			except MultipleResultsFound as mrf:
-				return responses.InternalException(mrf, {"room_id": ["Not unique"]})
-			orm_room_users = self._m_rooms_users.get_all_by_room(orm_room.id)
+			room_id = request.body["room_id"]
+			user_id = request.body["user_id"]
+
+			# Queries for authorization
+			try: orm_room = self._m_rooms.get(room_id)
+			except NoResultFound: return responses.NotFoundByID("room_id")
+
+			orm_room_users = self._m_rooms_users.get_all_by_room(room_id)
+
 			orm_room_ban = None
-			try:
-				orm_room_ban = self._m_rooms_bans.get(json["room_id"])
-			except NoResultFound:
-				# Room is not banned
-				pass
-			except MultipleResultsFound as mrf:
-				return responses.InternalException(mrf, {"room_id": ["Not unique"]})
+			try: orm_room_ban = self._m_rooms_bans.get(room_id)
+			except NoResultFound: pass # Room isn't banned
 
 			# Authorization
 			if orm_room_ban is not None:
+				# If room is banned
 				auth_response = self._s_auth.authorize(Action.ROOMS_ACCESS_BANNED, request.user, orm_room.user_id)
-				if not isinstance(auth_response, responses.OKEmpty):
-					return auth_response
+				if not isinstance(auth_response, responses.OKEmpty): return auth_response
+			# room is not banned
 			auth_response = self._s_auth.authorize(
 				Action.ROOMS_ACCESS_PUBLIC if orm_room.is_public else Action.ROOMS_ACCESS_PRIVATE,
 				request.user,
+				# Room's creator   + users added to the room
 				[orm_room.user_id] + [orm_room_user.user_id for orm_room_user in orm_room_users]
 			)
-			if not isinstance(auth_response, responses.OKEmpty):
-				return auth_response
+			if not isinstance(auth_response, responses.OKEmpty): return auth_response
 
-			return responses.OK(orm_room_users)
+			try:
+				return responses.OK(self._m_rooms_users.get(room_id, user_id))
+			except NoResultFound: return responses.NotFoundByID("user_id")
 		except SQLAlchemyError as sqlae:
 			return responses.DatabaseException(sqlae)
 
 	def get_all(self, request: 'th_Request'):
+		validator = validation.Dict({
+			"user_id": validation.Integer(allow_none=True),
+			"room_id": validation.Integer(allow_none=True),
+		}, allow_none=True, allow_empty=True, allow_all_defined_keys_missing=True, allow_undefined_keys=not self._strict_requests)
 		try:
 			# Validation
-			json = request.body
-			json_validator = validation.Json(True, True, True, not self._strict_requests, [
-				validation.Json.Key("room_id", True, validation.Integer(False)),
-				validation.Json.Key("user_id", True, validation.Integer(False))
-			])
-			try:
-				json_validator.validate(json)
-			except validation.Error as ve:
-				return responses.Unprocessable({"json": ve.errors})
+			try: validator.validate(request.body)
+			except validation.Error as ve: return responses.Unprocessable(ve.errors)
+
 			# Filters
-			room_id_filter = None if json is None else json.get("room_id")
-			user_id_filter = None if json is None else json.get("user_id")
+			room_id_filter = None if request.body is None else request.body.get("room_id")
+			user_id_filter = None if request.body is None else request.body.get("user_id")
 
 			# Authorization
+			# TODO check whatever is going on here
+			# Can user access all rooms users?
 			auth_response = self._s_auth.authorize(Action.ROOMS_USERS_ACCESS, request.user)
 			if isinstance(auth_response, responses.OKEmpty):
-				result = self._m_rooms_bans.get_all(False, False, None, room_id_filter, user_id_filter)
+				# yes
+				result = self._m_rooms_users.get_all(False, False, False, room_id_filter, user_id_filter)
 				return responses.OK(result)
 			else:
+				# Only return visible
 				# Filters by authorization
 				user_id = None
 				if isinstance(request.user, Registered):
 					user_id = request.user.user_id
 
-				exclude_public = True
 				auth_response = self._s_auth.authorize(Action.ROOMS_ACCESS_PUBLIC, request.user)
-				if isinstance(auth_response, responses.OKEmpty):
-					exclude_public = False
+				exclude_public = not isinstance(auth_response, responses.OKEmpty)
 
-				exclude_private = True
 				auth_response = self._s_auth.authorize(Action.ROOMS_ACCESS_PRIVATE, request.user)
-				if isinstance(auth_response, responses.OKEmpty):
-					exclude_private = False
+				exclude_private = not isinstance(auth_response, responses.OKEmpty)
 
-				exclude_banned = True
 				auth_response = self._s_auth.authorize(Action.ROOMS_ACCESS_BANNED, request.user)
-				if isinstance(auth_response, responses.OKEmpty):
-					exclude_banned = False
+				exclude_banned = not isinstance(auth_response, responses.OKEmpty)
 
-				result = self._m_rooms_users.get_all(exclude_banned, exclude_public, exclude_private, user_id, room_id_filter, user_id_filter)
+				result = self._m_rooms_users.get_all(
+					exclude_banned, exclude_public, exclude_private,
+					user_id, room_id_filter, user_id_filter
+				)
 				return responses.OK(result)
 		except SQLAlchemyError as sqlae:
 			return responses.DatabaseException(sqlae)
@@ -156,38 +144,31 @@ class RoomsUsers:
 	# def update(self, request: 'th_Request', user_id: int) -> responses.Response:
 
 	def delete(self, request: 'th_Request') -> responses.Response:
+		validator = validation.Dict({
+			"room_id": validation.Integer(),
+			"user_id": validation.Integer()
+		}, allow_undefined_keys=not self._strict_requests)
 		try:
 			# Validation
-			json = request.body
-			json_validator = validation.Json(False, False, False, not self._strict_requests, [
-				validation.Json.Key("room_id", False, validation.Integer(False)),
-				validation.Json.Key("user_id", False, validation.Integer(False))
-			])
-			try:
-				json_validator.validate(json)
-			except validation.Error as ve:
-				return responses.Unprocessable({"json": ve.errors})
+			try: validator.validate(request.body)
+			except validation.Error as ve: return responses.Unprocessable(ve.errors)
+
+			room_id = request.body["room_id"]
+			user_id = request.body["user_id"]
 
 			# Query for authorization
 			try:
-				orm_room = self._m_rooms.get(json["room_id"])
-			except NoResultFound:
-				return responses.NotFound({"room_id": ["Room with room_id doesn't exist"]})
-			except MultipleResultsFound as mrf:
-				return responses.InternalException(mrf, {"room_id": ["Not unique"]})
+				orm_room = self._m_rooms.get(room_id)
+			except NoResultFound: return responses.NotFoundByID("room_id")
 
 			# Authorization
 			auth_response = self._s_auth.authorize(Action.ROOMS_USERS_DELETE, request.user, orm_room.user_id)
-			if not isinstance(auth_response, responses.OKEmpty):
-				return auth_response
+			if not isinstance(auth_response, responses.OKEmpty): return auth_response
 
 			# Query
 			try:
-				self._m_rooms_users.delete(orm_room.id, json["user_id"])
+				self._m_rooms_users.delete(room_id, user_id)
 				return responses.OKEmpty()
-			except NoResultFound:
-				return responses.NotFound({"user_id": ["User with room_id doesn't exist"]})
-			except MultipleResultsFound as mrf:
-				return responses.InternalException(mrf, [{"room_id": ["Not unique"]}, {"user_id": ["Not unique"]}])
+			except NoResultFound: return responses.NotFoundByID("user_id")
 		except SQLAlchemyError as sqlae:
 			return responses.DatabaseException(sqlae)

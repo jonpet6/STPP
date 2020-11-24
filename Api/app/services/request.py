@@ -22,8 +22,6 @@ class Request:
 			return users_response
 		user = users_response.object
 
-		# header = request.Header(token=token)
-
 		if flask_request.method == "GET":
 			body = flask_request.args.to_dict()
 			# Convert str to int, if int
@@ -41,7 +39,7 @@ class Request:
 					body = json.loads(data.decode("utf-8"))
 				except json.JSONDecodeError:
 					if self._strict_requests:
-						return responses.Unprocessable({"json": ["Corrupt"]})
+						return responses.Unprocessable({"json": "Corrupt"})
 					else:
 						body = None
 

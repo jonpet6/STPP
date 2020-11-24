@@ -34,9 +34,9 @@ class _Object(Response):
 
 
 class Errors(Response):
-	def __init__(self, code: int, errors: 'TH_ERRORS'):
+	def __init__(self, code: int, errors: dict):
 		super().__init__(code)
-		self.errors = errors if type(errors) is list else [errors]
+		self.errors = errors
 
 	def to_flask(self):
 		return flask.jsonify({"errors": self.errors}), self.code
@@ -70,8 +70,13 @@ class OKEmpty(_Empty):
 
 # region 4xx Client error
 class Unauthorized(Errors):
-	def __init__(self, errors: 'TH_ERRORS'):
+	def __init__(self, errors: dict):
 		super().__init__(HTTPStatus.UNAUTHORIZED, errors)
+
+
+class UnauthorizedNotLoggedIn(Unauthorized):
+	def __init__(self):
+		super().__init__({"token": ["missing"]})
 
 
 class Forbidden(_Empty):
@@ -79,24 +84,38 @@ class Forbidden(_Empty):
 		super().__init__(HTTPStatus.FORBIDDEN)
 
 
+class MethodNotAllowed(_Empty):
+	def __init__(self):
+		super().__init__(HTTPStatus.METHOD_NOT_ALLOWED)
+
 # class BadRequest(_Errors):
 # 	def __init__(self, errors: 'TH_ERRORS'):
 # 		super().__init__(HTTPStatus.BAD_REQUEST, errors)
 
 
 class Unprocessable(Errors):
-	def __init__(self, errors: 'TH_ERRORS'):
+	def __init__(self, errors: dict):
 		super().__init__(HTTPStatus.UNPROCESSABLE_ENTITY, errors)
 
 
 class NotFound(Errors):
-	def __init__(self, errors: 'TH_ERRORS'):
+	def __init__(self, errors: dict):
 		super().__init__(HTTPStatus.NOT_FOUND, errors)
 
 
+class NotFoundByID(NotFound):
+	def __init__(self, column):
+		super().__init__({"keys": {column: "No results found with given value"}})
+
+
 class Conflict(Errors):
-	def __init__(self, errors: 'TH_ERRORS'):
+	def __init__(self, errors: dict):
 		super().__init__(HTTPStatus.CONFLICT, errors)
+
+
+class ConflictID(Conflict):
+	def __init__(self, column_name: str):
+		super().__init__({"keys": {column_name: ["Not unique"]}})
 
 #
 # class MethodNotAllowed(_Errors):
@@ -107,12 +126,12 @@ class Conflict(Errors):
 
 # region 5xx Server error
 class InternalError(Errors):
-	def __init__(self, errors: 'TH_ERRORS'):
+	def __init__(self, errors: dict):
 		super().__init__(HTTPStatus.INTERNAL_SERVER_ERROR, errors)
 
 
 class InternalException(Errors):
-	def __init__(self, exception: Exception, errors: 'TH_ERRORS'):
+	def __init__(self, exception: Exception, errors: dict):
 		logging.exception(f"{str(exception)}\n{str(errors)}")
 		super().__init__(HTTPStatus.INTERNAL_SERVER_ERROR, errors)
 
