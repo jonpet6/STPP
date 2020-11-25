@@ -41,6 +41,8 @@ def init(
 		request: 'th_Request' = request_response.object
 		# Insert/replace any values in the json
 		if insert is not None:
+			if request.body is None:
+				request.body = {}
 			for key in insert.keys():
 				request.body[key] = insert[key]
 		# Run method
@@ -113,7 +115,7 @@ def init(
 			"PATCH": c_rooms.update,
 			"DELETE": c_rooms.delete
 		}, {
-			"user_id": try_int(user_id),
+			# "user_id": try_int(user_id),
 			"room_id": try_int(room_id)
 		})
 
@@ -132,7 +134,7 @@ def init(
 			"PATCH": c_posts.update,
 			"DELETE": c_posts.delete
 		}, {
-			"user_id": try_int(user_id),
+			# "user_id": try_int(user_id),
 			"post_id": try_int(post_id)
 		})
 
@@ -208,8 +210,8 @@ def init(
 			"PATCH": c_posts.update,
 			"DELETE": c_posts.delete
 		}, {
-			"room_id": try_int(room_id),
-			"user_id": try_int(user_id),
+			# "room_id": try_int(room_id),
+			# "user_id": try_int(user_id),
 			"post_id": try_int(post_id)
 		})
 
@@ -229,7 +231,7 @@ def init(
 			"PATCH": c_posts.update,
 			"DELETE": c_posts.delete
 		}, {
-			"room_id": try_int(room_id),
+			# "room_id": try_int(room_id),
 			"post_id": try_int(post_id)
 		})
 

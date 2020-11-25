@@ -45,10 +45,10 @@ class RoomsUsers:
 			return scope.query(orm.RoomsUsers).filter(orm.RoomsUsers.room_id == room_id).all()
 
 	def get_all(self, exclude_banned_rooms: bool, exclude_public: bool, exclude_private: bool, user_id: int = None, room_id_filter: int = None, user_id_filter: int = None):
-		with self._database.scope as scope:O
+		with self._database.scope as scope:
 			q_visible_ids = []
 			if user_id is not None:
-				q_visible_ids = scope.query(orm.RoomsUsers).filter(
+				q_visible_ids = scope.query(orm.RoomsUsers.room_id).filter(
 					or_(
 						# RoomsUsers of which the room is owned by user
 						orm.RoomsUsers.room_id.in_(
@@ -59,7 +59,7 @@ class RoomsUsers:
 					)
 				)
 
-			q_filtered_ids = scope.query(orm.RoomsUsers)
+			q_filtered_ids = scope.query(orm.RoomsUsers.room_id)
 			if exclude_banned_rooms:
 				q_filtered_ids = q_filtered_ids.filter(
 					orm.RoomsUsers.room_id.notin_(scope.query(orm.RoomsBans.room_id))

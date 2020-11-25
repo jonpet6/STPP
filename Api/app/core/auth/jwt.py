@@ -1,3 +1,4 @@
+import binascii
 import typing
 if typing.TYPE_CHECKING:
 	from core.responses import TH_ERRORS
@@ -111,6 +112,8 @@ class Token:
 			header = _decode_dict(header_str.encode(_STRING_ENCODING))
 		except json.JSONDecodeError:
 			errors.append("Header is not a dict")
+		except (binascii.Error, UnicodeError):
+			errors.append("Wrong token format")
 
 		try:
 			payload = dacite.from_dict(_Payload, _decode_dict(payload_str.encode(_STRING_ENCODING)))
@@ -208,6 +211,11 @@ def _encode_bytes(data: bytes) -> bytes:
 
 
 def _decode_bytes(data: bytes) -> bytes:
+	"""
+	Raises
+	-------
+	binascii.Error
+	"""
 	return base64.b64decode(data)
 
 
@@ -221,6 +229,7 @@ def _decode_dict(data: bytes) -> dict:
 	"""
 	Raises
 	-------
+	binascii.Error
 	UnicodeError
 	json.JSONDecodeError
 	"""

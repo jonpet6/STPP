@@ -49,9 +49,7 @@ class Rooms:
 		sqlalchemy.exc.SQLAlchemyError
 		"""
 		with self._database.scope as scope:
-			return scope.query(orm.Rooms).all()
-			# TODO
-			q_visible_ids = None
+			q_visible_ids = []
 			if user_id is not None:
 				q_visible_ids = scope.query(orm.Rooms.id).filter(
 					or_(
@@ -61,6 +59,7 @@ class Rooms:
 						orm.Rooms.id.in_(
 							scope.query(orm.RoomsUsers.room_id).filter(orm.RoomsUsers.user_id == user_id)
 						),
+						# Rooms to which the user has been added
 					)
 				)
 

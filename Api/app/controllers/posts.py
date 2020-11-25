@@ -56,7 +56,7 @@ class Posts:
 
 			# Query
 			try:
-				self._m_posts.create(user.user_id, request.user.user_id, request.body["content"])
+				self._m_posts.create(room_id, user.user_id, request.body["content"])
 				return responses.Created()
 			except IntegrityError: return responses.NotFoundByID("user_id")
 		except SQLAlchemyError as sqlae:
@@ -113,17 +113,18 @@ class Posts:
 			user_id_filter = None if request.body is None else request.body.get("user_id")
 			room_id_filter = None if request.body is None else request.body.get("room_id")
 
+			# Get user's ID if registered
+			user_id = None
+			if isinstance(request.user, Registered):
+				user_id = request.user.user_id
+
 			# Authorization
 			auth_response = self._s_auth.authorize(Action.ROOMS_POSTS_ACCESS, request.user)
 			if isinstance(auth_response, responses.OKEmpty):
-				result = self._m_rooms_bans.get_all(False, False, None, room_id_filter, user_id_filter)
+				result = self._m_posts.get_all(False, False, False, user_id, room_id_filter, user_id_filter)
 				return responses.OK(result)
 			else:
 				# Filters by authorization
-				user_id = None
-				if isinstance(request.user, Registered):
-					user_id = request.user.user_id
-
 				auth_response = self._s_auth.authorize(Action.ROOMS_ACCESS_PUBLIC, request.user)
 				exclude_public = not isinstance(auth_response, responses.OKEmpty)
 

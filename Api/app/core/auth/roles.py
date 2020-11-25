@@ -35,6 +35,7 @@ class Roles:
 		Action.USERS_BANS_CREATE,
 		Action.ROOMS_UPDATE_TITLE,
 		Action.ROOMS_BANS_CREATE,
+		Action.ROOMS_POSTS_ACCESS,
 		Action.POSTS_CLEAR,
 		Action.POSTS_DELETE,
 
