@@ -10,7 +10,7 @@ import sqlalchemy.orm
 import sqlalchemy.engine.url
 from sqlalchemy.exc import SQLAlchemyError
 
-_DRIVER = "postgres+psycopg2"
+_DRIVER = "postgresql+psycopg2"
 
 
 class Database:
