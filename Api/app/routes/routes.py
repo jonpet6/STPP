@@ -1,4 +1,6 @@
 import typing
+from http import HTTPStatus
+
 import flask
 from core import responses
 
@@ -13,7 +15,8 @@ if typing.TYPE_CHECKING:
 	from controllers.rooms_users import RoomsUsers as th_c_RoomsUsers
 	from controllers.posts import Posts as th_c_Posts
 
-	th_Methods = typing.Dict[str, typing.Callable[[th_Request], responses.Response]]
+	th_Controller_Method = typing.Callable[[th_Request], responses.Response]
+	th_Methods = typing.Dict[str, th_Controller_Method]
 
 
 def init(
@@ -25,19 +28,22 @@ def init(
 	bp_routes = flask.Blueprint("bp_routes", __name__)
 
 	# region Common
-	ALL_METHODS = ['GET', 'HEAD', 'POST', 'PUT', 'DELETE', 'CONNECT', 'OPTIONS', 'TRACE', 'PATCH']
+	API_METHODS = ['GET', 'POST', 'DELETE', 'PATCH']
 
-	def r_id(name: str):
+	def r_id(name: str) -> str:
 		return f"/<string:{name}>"
 
+	def try_int(number: str) -> typing.Union[int, str]:
+		return int(number) if number.isdecimal() else number
+
 	def process_request(methods: 'th_Methods', insert: typing.Dict[str, typing.Any] = None):
-		# Check if method is valid
+		# Get controller method
 		method = methods.get(flask.request.method)
+		# Check if method is valid
 		if method is None: return responses.MethodNotAllowed().to_flask()
 		# Formats flask response to our response, checks for token
 		request_response = s_request.from_flask(flask.request)
-		if not isinstance(request_response, responses.OK):
-			return request_response.to_flask()
+		if not isinstance(request_response, responses.OK): return request_response.to_flask()
 		request: 'th_Request' = request_response.object
 		# Insert/replace any values in the json
 		if insert is not None:
@@ -48,8 +54,12 @@ def init(
 		# Run method
 		return method(request).to_flask()
 
-	def try_int(number: str):
-		return int(number) if number.isdecimal() else number
+	def process_inner(controller_method: 'th_Controller_Method', body_override: dict) -> responses.Response:
+		request_response = s_request.from_flask(flask.request)
+		if not isinstance(request_response, responses.OK): return request_response.to_flask()
+		request: 'th_Request' = request_response.object
+		request.body = body_override
+		return controller_method(request)
 	# endregion Common
 
 	# region Route strings
@@ -74,7 +84,7 @@ def init(
 	r_rooms_room_id_users_userid_posts_postid = r_rooms_room_id_users_userid_posts+r_id("post_id")
 	# endregion Route strings
 
-	@bp_routes.route(r_login, methods=ALL_METHODS)
+	@bp_routes.route(r_login, methods=API_METHODS)
 	def login() -> flask.Response:
 		return process_request({
 			"POST": c_login.login
@@ -82,7 +92,7 @@ def init(
 
 	# region /users
 
-	@bp_routes.route(r_users, methods=ALL_METHODS)
+	@bp_routes.route(r_users, methods=API_METHODS)
 	def users() -> flask.Response:
 		return process_request({
 			"GET": c_users.get_all,
@@ -90,7 +100,7 @@ def init(
 			"DELETE": c_users.delete
 		})
 
-	@bp_routes.route(r_users_userid, methods=ALL_METHODS)
+	@bp_routes.route(r_users_userid, methods=API_METHODS)
 	def users_userid(user_id: str) -> flask.Response:
 		return process_request({
 			"GET": c_users.get,
@@ -100,51 +110,67 @@ def init(
 			"user_id": try_int(user_id)
 		})
 
-	@bp_routes.route(r_users_userid_rooms, methods=ALL_METHODS)
-	def users_userid_rooms(user_id: str):
+	@bp_routes.route(r_users_userid_rooms, methods=API_METHODS)
+	def users_userid_rooms(user_id: str) -> flask.Response:
+		# Check if user exists
+		users_response = process_inner(c_users.get, {"user_id": try_int(user_id)})
+		if not isinstance(users_response, responses.OK): return users_response.to_flask()
+		# Process request
 		return process_request({
 			"GET": c_rooms.get_all
 		}, {
 			"user_id": try_int(user_id)
 		})
 
-	@bp_routes.route(r_users_userid_rooms_roomid, methods=ALL_METHODS)
+	@bp_routes.route(r_users_userid_rooms_roomid, methods=API_METHODS)
 	def users_userid_rooms_roomid(user_id: str, room_id: str):
+		# Check if user exists
+		users_response = process_inner(c_users.get, {"user_id": try_int(user_id)})
+		if not isinstance(users_response, responses.OK): return users_response.to_flask()
+		# Process request
 		return process_request({
 			"GET": c_rooms.get,
 			"PATCH": c_rooms.update,
 			"DELETE": c_rooms.delete
 		}, {
-			# "user_id": try_int(user_id),
+			"user_id": try_int(user_id),
 			"room_id": try_int(room_id)
 		})
 
-	@bp_routes.route(r_users_userid_posts, methods=ALL_METHODS)
+	@bp_routes.route(r_users_userid_posts, methods=API_METHODS)
 	def users_userid_posts(user_id: str):
+		# Check if user exists
+		users_response = process_inner(c_users.get, {"user_id": try_int(user_id)})
+		if not isinstance(users_response, responses.OK): return users_response.to_flask()
+		# Process request
 		return process_request({
 			"GET": c_posts.get_all
 		}, {
 			"user_id": try_int(user_id)
 		})
 
-	@bp_routes.route(r_users_userid_posts_postid, methods=ALL_METHODS)
+	@bp_routes.route(r_users_userid_posts_postid, methods=API_METHODS)
 	def users_userid_posts_postid(user_id: str, post_id: str):
+		# Check if user exists
+		users_response = process_inner(c_users.get, {"user_id": try_int(user_id)})
+		if not isinstance(users_response, responses.OK): return users_response.to_flask()
+		# Process request
 		return process_request({
 			"GET": c_posts.get,
 			"PATCH": c_posts.update,
 			"DELETE": c_posts.delete
 		}, {
-			# "user_id": try_int(user_id),
+			"user_id": try_int(user_id),
 			"post_id": try_int(post_id)
 		})
 
-	@bp_routes.route(r_users_bans, methods=ALL_METHODS)
-	def users_bans():
+	@bp_routes.route(r_users_bans, methods=API_METHODS)
+	def users_bans() -> flask.Response:
 		return process_request({
 			"GET": c_users_bans.get_all
 		})
 
-	@bp_routes.route(r_users_bans_userid, methods=ALL_METHODS)
+	@bp_routes.route(r_users_bans_userid, methods=API_METHODS)
 	def users_bans_userid(user_id: str):
 		return process_request({
 			"GET": c_users_bans.get,
@@ -158,14 +184,14 @@ def init(
 	# endregion /users
 
 	# region /rooms
-	@bp_routes.route(r_rooms, methods=ALL_METHODS)
-	def rooms():
+	@bp_routes.route(r_rooms, methods=API_METHODS)
+	def rooms() -> flask.Response:
 		return process_request({
 			"GET": c_rooms.get_all,
 			"POST": c_rooms.create
 		})
 
-	@bp_routes.route(r_rooms_roomid, methods=ALL_METHODS)
+	@bp_routes.route(r_rooms_roomid, methods=API_METHODS)
 	def rooms_roomid(room_id: str):
 		return process_request({
 			"GET": c_rooms.get,
@@ -175,8 +201,12 @@ def init(
 			"room_id": try_int(room_id)
 		})
 
-	@bp_routes.route(r_rooms_room_id_users, methods=ALL_METHODS)
+	@bp_routes.route(r_rooms_room_id_users, methods=API_METHODS)
 	def rooms_roomid_users(room_id: str):
+		# Check if room exists
+		room_response = process_inner(c_rooms.get, {"room_id": try_int(room_id)})
+		if not isinstance(room_response, responses.OK): return room_response.to_flask()
+		# Process request
 		return process_request({
 			"GET": c_rooms_users.get_all,
 			"POST": c_rooms_users.create
@@ -184,8 +214,8 @@ def init(
 			"room_id": try_int(room_id)
 		})
 
-	@bp_routes.route(r_rooms_room_id_users_userid, methods=ALL_METHODS)
-	def r_rooms_room_id_users_userid(room_id: str, user_id: str):
+	@bp_routes.route(r_rooms_room_id_users_userid, methods=API_METHODS)
+	def rooms_room_id_users_userid(room_id: str, user_id: str):
 		return process_request({
 			"GET": c_rooms_users.get,
 			"DELETE": c_rooms_users.delete
@@ -194,8 +224,12 @@ def init(
 			"user_id": try_int(user_id)
 		})
 
-	@bp_routes.route(r_rooms_room_id_users_userid_posts, methods=ALL_METHODS)
-	def r_rooms_room_id_users_userid_posts(room_id: str, user_id: str):
+	@bp_routes.route(r_rooms_room_id_users_userid_posts, methods=API_METHODS)
+	def rooms_room_id_users_userid_posts(room_id: str, user_id: str):
+		# Check if room user exists
+		ru_response = process_inner(c_rooms_users.get, {"room_id": try_int(room_id), "user_id": try_int(user_id)})
+		if not isinstance(ru_response, responses.OK): return ru_response.to_flask()
+		# Process request
 		return process_request({
 			"GET": c_posts.get_all
 		}, {
@@ -203,20 +237,26 @@ def init(
 			"user_id": try_int(user_id)
 		})
 
-	@bp_routes.route(r_rooms_room_id_users_userid_posts_postid, methods=ALL_METHODS)
-	def r_rooms_room_id_users_userid_posts_postid(room_id: str, user_id: str, post_id: str):
+	@bp_routes.route(r_rooms_room_id_users_userid_posts_postid, methods=API_METHODS)
+	def rooms_room_id_users_userid_posts_postid(room_id: str, user_id: str, post_id: str):
+		# Check if room user exists
+		ru_response = process_inner(c_rooms_users.get, {"room_id": try_int(room_id), "user_id": try_int(user_id)})
+		if not isinstance(ru_response, responses.OK): return ru_response.to_flask()
+		# Process request
 		return process_request({
 			"GET": c_posts.get,
 			"PATCH": c_posts.update,
 			"DELETE": c_posts.delete
 		}, {
-			# "room_id": try_int(room_id),
-			# "user_id": try_int(user_id),
 			"post_id": try_int(post_id)
 		})
 
-	@bp_routes.route(r_rooms_roomid_posts, methods=ALL_METHODS)
-	def r_rooms_roomid_posts(room_id: str):
+	@bp_routes.route(r_rooms_roomid_posts, methods=API_METHODS)
+	def rooms_roomid_posts(room_id: str):
+		# Check if room exists
+		room_response = process_inner(c_rooms.get, {"room_id": try_int(room_id)})
+		if not isinstance(room_response, responses.OK): return room_response.to_flask()
+		# Process request
 		return process_request({
 			"GET": c_posts.get_all,
 			"POST": c_posts.create
@@ -224,19 +264,22 @@ def init(
 			"room_id": try_int(room_id)
 		})
 
-	@bp_routes.route(r_rooms_roomid_posts_post_id, methods=ALL_METHODS)
-	def r_rooms_roomid_posts_post_id(room_id: str, post_id: str):
+	@bp_routes.route(r_rooms_roomid_posts_post_id, methods=API_METHODS)
+	def rooms_roomid_posts_post_id(room_id: str, post_id: str):
+		# Check if room exists
+		room_response = process_inner(c_rooms.get, {"room_id": try_int(room_id)})
+		if not isinstance(room_response, responses.OK): return room_response.to_flask()
+		# Process request
 		return process_request({
 			"GET": c_posts.get,
 			"PATCH": c_posts.update,
 			"DELETE": c_posts.delete
 		}, {
-			# "room_id": try_int(room_id),
 			"post_id": try_int(post_id)
 		})
 
-	@bp_routes.route(r_rooms_roomid_bans, methods=ALL_METHODS)
-	def r_rooms_roomid_bans(room_id: str):
+	@bp_routes.route(r_rooms_roomid_bans, methods=API_METHODS)
+	def rooms_roomid_bans(room_id: str):
 		return process_request({
 			"GET": c_rooms_bans.get,
 			"POST": c_rooms_bans.create,

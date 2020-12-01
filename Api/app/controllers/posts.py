@@ -31,6 +31,7 @@ class Posts:
 			"content": validation.String(length_min=orm.Posts.CONTENT_LEN_MIN, length_max=orm.Posts.CONTENT_LEN_MAX)
 		}, allow_undefined_keys=not self._strict_requests)
 		try:
+			print(request.body)
 			# Validation
 			try: validator.validate(request.body)
 			except validation.Error as ve: return responses.Unprocessable(ve.errors)

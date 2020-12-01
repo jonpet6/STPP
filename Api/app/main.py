@@ -94,7 +94,7 @@ def main():
 	# Set up routes
 	app.register_blueprint(routes.routes.init(s_request, c_login, c_users, c_users_bans, c_rooms, c_rooms_bans, c_rooms_users, c_posts))
 	# Start the app
-	app.run(port=cfg[cfg.APP_PORT], debug=cfg[cfg.APP_DEBUG], threaded=True)
+	app.run(port=cfg[cfg.APP_PORT], debug=cfg[cfg.APP_DEBUG], threaded=False)
 
 
 def connect_db(cfg: core.config.Config) -> core.database.Database:
