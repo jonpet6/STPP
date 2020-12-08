@@ -6,7 +6,7 @@ from app.models.rooms_users import RoomsUsers
 from app.models.users import Users
 from models.users_bans import UsersBans
 
-database = test.resources.common.RDatabase().get()
+database = test.resources.common.RDatabase.get()
 m_posts = Posts(database)
 m_rooms_users = RoomsUsers(database)
 m_rooms_bans = RoomsBans(database)

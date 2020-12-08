@@ -1,9 +1,8 @@
+import json
 import os
-import signal
 import threading
 from http import HTTPStatus
 from pathlib import Path
-import threading
 
 import argon2
 import flask
@@ -12,19 +11,6 @@ import requests
 import werkzeug
 from flask_cors import CORS
 
-import main
-from core.config import Config
-import core.database
-import core.auth.jwt
-import models.posts
-import models.rooms
-import models.rooms_bans
-import models.rooms_users
-import models.users
-import models.users_bans
-import services.auth
-import services.request
-import services.users
 import controllers.login
 import controllers.posts
 import controllers.rooms
@@ -32,7 +18,20 @@ import controllers.rooms_bans
 import controllers.rooms_users
 import controllers.users
 import controllers.users_bans
+import core.auth.jwt
+import core.database
+import main
+import models.posts
+import models.rooms
+import models.rooms_bans
+import models.rooms_users
+import models.users
+import models.users_bans
 import routes
+import services.auth
+import services.request
+import services.users
+from core.config import Config
 
 SERVER_ADDRESS = "http://127.0.0.1:4200"
 
@@ -43,24 +42,27 @@ def chdir():
 
 # noinspection PyMethodMayBeStatic
 class RConfig:
-	def get(self):
+	@staticmethod
+	def get():
 		chdir()
 		return Config("./", "config")
 
 
 # noinspection PyMethodMayBeStatic
 class RDatabase:
-	def _get_db_password(self):
+	@staticmethod
+	def _get_db_password():
 		chdir()
 		with open("dbpass") as file:
 			return file.readline()
 
-	def get(self):
-		cfg = RConfig().get()
+	@staticmethod
+	def get():
+		cfg = RConfig.get()
 		return core.database.Database(
 			cfg[cfg.DB_HOST], cfg[cfg.DB_PORT],
 			cfg[cfg.DB_NAME], cfg[cfg.DB_SCHEMA],
-			cfg[cfg.DB_USER], self._get_db_password()
+			cfg[cfg.DB_USER], RDatabase._get_db_password()
 		)
 
 
@@ -69,14 +71,14 @@ class RServer:
 	_app_thread: threading.Thread
 
 	def start(self):
-		cfg = RConfig().get()
+		cfg = RConfig.get()
 		private_key = core.auth.jwt.read_private_key(cfg[cfg.TOKENS_PRIVATE_KEY_PATH])
 		public_key = core.auth.jwt.read_public_key(cfg[cfg.TOKENS_PUBLIC_KEY_PATH])
 		tokens_lifetime = isodate.parse_duration(cfg[cfg.TOKENS_LIFETIME])
 		strict_requests = cfg[cfg.APP_STRICT_REQUESTS]
 		# Core
 		password_hasher = argon2.PasswordHasher()
-		database = RDatabase().get()
+		database = RDatabase.get()
 
 		# Models
 		m_rooms_bans	= models.rooms_bans.	RoomsBans(database)
@@ -118,7 +120,22 @@ class RServer:
 
 # noinspection PyMethodMayBeStatic
 class RUsers:
-	def get_token(self, user_creds: dict):
-		response: requests.Response = requests.post(SERVER_ADDRESS+"/login", user_creds)
+	@staticmethod
+	def get_token(user_creds: dict) -> str:
+		response: requests.Response = requests.post(SERVER_ADDRESS+"/login", json=user_creds)
 		assert(response.status_code == HTTPStatus.OK)
-		return response.text
+		response_dict = json.loads(response.content)
+		return response_dict["token"]
+
+	@staticmethod
+	def get_user_id_from_token(token: str) -> int:
+		try:
+			# noinspection PyProtectedMember
+			return core.auth.jwt.Token.from_string(token)._payload.claims.user_id
+		except core.auth.jwt.Error as jwtError:
+			print(jwtError.errors)
+			raise jwtError
+
+	@staticmethod
+	def get_user_id(user_creds: dict) -> int:
+		return RUsers.get_user_id_from_token(RUsers.get_token(user_creds))
