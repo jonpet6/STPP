@@ -1,7 +1,0 @@
-n: TestUser
-l: testuser
-p: testuserpass
-
-n: TestAdmin
-l: testadmin
-p: testadminpass

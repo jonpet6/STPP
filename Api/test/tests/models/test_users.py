@@ -10,7 +10,7 @@ class TestUsers(unittest.TestCase):
 	model = None
 
 	def setUp(self) -> None:
-		from test.models import setup
+		from test.tests.models import setup
 		self.model = setup.m_users
 
 	def test_create(self):
