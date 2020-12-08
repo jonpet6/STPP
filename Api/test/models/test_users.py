@@ -10,8 +10,8 @@ class TestUsers(unittest.TestCase):
 	model = None
 
 	def setUp(self) -> None:
-		from test.models import common
-		self.model = common.m_users
+		from test.models import setup
+		self.model = setup.m_users
 
 	def test_create(self):
 		login = generate_login()
