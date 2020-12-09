@@ -7,14 +7,14 @@
 </template>
 
 <script>
-	import {Users as api_Users} from '@/restclient/users';
-	import FormRoot from "@/components/forms/core/FormRoot";
-	import FormInput from "@/components/forms/core/inputs/FormInput";
+	import api_Users from "@/restclient/users"
+	import FormRoot from "@/components/forms/core/FormRoot"
+	import FormInput from "@/components/forms/core/inputs/FormInput"
 
 	export default {
 		name: "Register",
 		props: {
-			registered: Function
+			registeredEvent: Function
 		},
 		components: {
 			FormInput,
@@ -31,9 +31,7 @@
 				console.log(response)
 				if (response.status === 201) {
 					this.errorsClear()
-					// TODO show success in ui?
-					// Fire registered event
-					if(typeof this.registered === "function") {this.registered();}
+					this.registered()
 				} else {
 					this.errorsSet(response.response.data.errors)
 				}
@@ -47,6 +45,15 @@
 				this.$refs.name.errors = errors.keys.name;
 				this.$refs.login.errors = errors.keys.login;
 				this.$refs.password.errors = errors.keys.password;
+			},
+
+			registered() {
+				if(this.registeredEvent != null) {
+					this.registeredEvent();
+				} else {
+					this.$router.push("/login")
+					location.reload()
+				}
 			}
 		}
 	}

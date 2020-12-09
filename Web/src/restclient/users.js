@@ -1,8 +1,8 @@
-import {Client} from '@/restclient/client'
+import Client from "@/restclient/client"
 
 const END_POINT = "/users"
 
-export class Users {
+export default class Users {
 	static get() {
 		return Client.Api().get(END_POINT);
 	}

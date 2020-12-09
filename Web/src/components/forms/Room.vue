@@ -34,9 +34,10 @@
 </template>
 
 <script>
-	import FormInput from "@/components/forms/core/inputs/FormInput";
-	import ToggleButton from "@/components/forms/core/inputs/ToggleButton";
-	import {Rooms as api_Rooms} from "@/restclient/rooms";
+	import FormInput from "@/components/forms/core/inputs/FormInput"
+	import ToggleButton from "@/components/forms/core/inputs/ToggleButton"
+	import api_Rooms from "@/restclient/rooms"
+
 	export default {
 		name: "Room",
 		props: {

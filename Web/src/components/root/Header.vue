@@ -1,11 +1,9 @@
 <template>
 	<header id="header" class="d-flex justify-content-between">
 		<h1 v-on:click="home()">STPP</h1>
-
 		<div>
 			<div v-if="is_logged_in" class="d-flex flex-md-row">
-
-				<h2 ref="userName">{{ username }}</h2>
+				<h2 ref="userName" v-on:click="usernameClicked">{{ username }}</h2>
 
 				<span style="padding-left: 1vw;"/>
 				<b-button v-on:click="logout" style="margin: auto">Logout</b-button>
@@ -18,7 +16,7 @@
 </template>
 
 <script>
-	import {Client} from '@/restclient/client'
+	import Client from "@/restclient/client"
 
 	export default {
 		name: "Header",
@@ -43,6 +41,12 @@
 			},
 			home() {
 				this.$router.push("/");
+			},
+			usernameClicked() {
+				let user_id = Client.get_user_id();
+				if( user_id != null) {
+					this.$router.push("/users/"+user_id)
+				}
 			}
 		}
 	}
