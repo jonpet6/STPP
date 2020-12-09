@@ -2,7 +2,7 @@
 	<b-container id="app" class="h-100 d-flex flex-column">
 		<b-row>
 			<b-col>
-				<MyHeader id="header"/>
+				<Header id="header"/>
 			</b-col>
 		</b-row>
 		<b-row class="flex-fill" align-v="center">
@@ -19,13 +19,13 @@
 </template>
 
 <script>
-	import MyHeader from "@/components/root/Header";
-	import Footer from '@/components/root/Footer'
+	import Header from "@/components/root/Header"
+	import Footer from "@/components/root/Footer"
 
 	export default {
 		name: 'App',
 		components: {
-			MyHeader,
+			Header,
 			Footer
 		}
 	}

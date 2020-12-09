@@ -1,12 +1,20 @@
 <template>
-	<LRCard
+	<ErrorCard v-if="this.error_response !== null" :response="this.error_response"/>
+	<LRCard v-else
 			:left="room.title"
-			:right="'Owner: '+username"
+			:center=" room.is_public ? '' : '(private)' "
+			:right="owner" :right-clicked-event="ownerClicked"
 	>
-		<div class="d-flex justify-content-between align-items-end">
-			<p v-for="user in users" v-bind:key="user.id">
-				{{user.name}}
-			</p>
+		<div class="d-flex justify-content-between align-items-end pb-2" style="float: right;">
+			<div class="list" style="margin: 0 3px;" v-for="user in users" v-bind:key="user.id">
+				<RoomUser :name="user.name" :user_id="user.id" :allow_remove="false"/>
+			</div>
+
+			<b-button	v-if="is_owned_by_user"
+						v-on:click="manageUsersClicked"
+						class="btn-info">
+				<b-icon-person-lines-fill/> Manage users
+			</b-button>
 		</div>
 
 		<Post
@@ -15,8 +23,9 @@
 			:content="post.content"
 			:date_created="new Date(Date.parse(post.date_created))"
 			:date_updated="new Date(Date.parse(post.date_updated))"
+			:post-updated-event="refresh_posts"
 		/>
-		<PostForm
+		<PostForm v-if="is_logged_in"
 				:room_id="room.id"
 				:post-created-event="refresh_posts"
 		/>
@@ -24,31 +33,35 @@
 </template>
 
 <script>
-	import {Rooms as api_Rooms} from "@/restclient/rooms";
-	import {Users as api_users} from "@/restclient/users";
-	import LRCard from "@/components/utils/LRCard";
-	import Post from "@/components/items/Post";
+	import Client from "@/restclient/client"
+	import api_Rooms from "@/restclient/rooms"
+	import api_users from "@/restclient/users"
+	import LRCard from "@/components/utils/LRCard"
+	import Post from "@/components/items/Post"
 	import PostForm from "@/components/forms/Post"
+	import RoomUser from "@/components/items/RoomUser";
 
 	export default {
 		name: "Room",
-		components: {LRCard, Post, PostForm},
+		components: {LRCard, Post, PostForm, RoomUser},
+		data() { return {
+			room: Object,
+			users: [],
+			posts: Object,
+
+			user: Object,
+
+			error_response: null
+		}},
+		computed: {
+			is_logged_in() { return Client.is_logged_in() },
+			is_owned_by_user() { return this.user !== null && this.user['id'] === Client.get_user_id() },
+			owner() { return this.user === null ? "" : "Owner: "+ this.user.name },
+		},
 		mounted() {
 			this.getRoom();
 			this.getRUs();
 			this.getPosts();
-		},
-		data() {
-			return {
-				room: Object,
-				users: [],
-				posts: Object,
-
-				user: Object,
-			}
-		},
-		computed: {
-			username() { return this.user === null ? "" : this.user.name }
 		},
 		methods: {
 			getRoom() {
@@ -59,6 +72,7 @@
 			getRoomResponse(response) {
 				if( response.status !== 200 ) {
 					console.log(response)
+					this.error_response = response
 				} else {
 					this.room = response.data;
 					this.getUser(this.room["user_id"]);
@@ -116,6 +130,12 @@
 				}
 			},
 
+			ownerClicked() {
+				this.$router.push("/users/"+this.user.id)
+			},
+			manageUsersClicked() {
+				this.$router.push("/rooms/"+this.$route.params.id+"/users")
+			},
 			refresh_posts() {
 				this.getPosts()
 			}

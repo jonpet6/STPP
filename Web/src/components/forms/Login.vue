@@ -13,12 +13,12 @@
 </template>
 
 <script>
-	import {Client} from '@/restclient/client'
-	import {Login as api_Login} from "@/restclient/login";
-	import {Users as api_Users} from "@/restclient/users";
-	import FormInput from "@/components/forms/core/inputs/FormInput";
-	import FormGroup from "@/components/forms/core/FormGroup";
-	import FormRoot from "@/components/forms/core/FormRoot";
+	import Client from "@/restclient/client"
+	import api_Login from "@/restclient/login"
+	import api_Users from "@/restclient/users"
+	import FormInput from "@/components/forms/core/inputs/FormInput"
+	import FormGroup from "@/components/forms/core/FormGroup"
+	import FormRoot from "@/components/forms/core/FormRoot"
 
 	export default {
 		name: "Login",
@@ -83,6 +83,7 @@
 					this.loggedInEvent();
 				} else {
 					this.$router.push("/")
+					location.reload()
 				}
 			}
 		}

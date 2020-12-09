@@ -1,7 +1,6 @@
 import axios from 'axios';
-// import {Users as api_Users} from "@/restclient/users";
 
-export class Client {
+export default class Client {
 	static _Api = axios.create({
 		baseURL: "http://127.0.0.1:4200",
 		timeout: 2000,
@@ -37,6 +36,10 @@ export class Client {
 		} else {
 			return JSON.parse(user)
 		}
+	}
+	static get_user_id() {
+		let user = this.get_user()
+		return user == null ? null : user['id'];
 	}
 
 	static is_logged_in() {
