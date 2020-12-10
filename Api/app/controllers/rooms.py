@@ -157,6 +157,7 @@ class Rooms:
 			except validation.Error as ve: return responses.Unprocessable(ve.errors)
 
 			room_id = request.body["room_id"]
+
 			# Query for authorization
 			try: orm_room = self._m_rooms.get(room_id)
 			except NoResultFound: return responses.NotFoundByID("room_id")
