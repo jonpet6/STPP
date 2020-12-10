@@ -12,6 +12,8 @@
     1. Create database stpp
     2. Create schema "test"
     3. Exec query [testdb.sql](./setup/testdb.psql)
+        * Manually
+        * Using [reset.py](./resources/reset.py)
 5. Run tests
     1. Start server with [common.py](./resources/common.py)
     2. Via pycharm -> right click [test folder](/test) -> 'Run unittests in test'

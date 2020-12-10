@@ -67,6 +67,17 @@ class RDatabase:
 			cfg[cfg.DB_USER], RDatabase._get_db_password()
 		)
 
+	@staticmethod
+	def reset():
+		# Clear all
+		with RDatabase.get().scope as db:
+			meta = db.metadata
+			for table in reversed(meta.sorted_tables):
+				print
+				'Clear table %s' % table
+				session.execute(table.delete())
+			session.commit()
+
 
 class RTokens:
 	@staticmethod

@@ -1,10 +1,8 @@
-from http import HTTPStatus
-
 import requests
+from http import HTTPStatus
 
 from test.resources import dbdata
 from test.tests.routes.routes_tc import RoutesTC
-
 
 class TestUsers(RoutesTC):
 	PATH = RoutesTC.server_address+"/login"
