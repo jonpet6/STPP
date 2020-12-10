@@ -66,6 +66,24 @@ class RDatabase:
 		)
 
 
+class RTokens:
+	@staticmethod
+	def get_private_key():
+		cfg = RConfig.get()
+		return core.auth.jwt.read_private_key(cfg[cfg.TOKENS_PRIVATE_KEY_PATH])
+
+	@staticmethod
+	def get_public_key():
+		cfg = RConfig.get()
+		return core.auth.jwt.read_public_key(cfg[cfg.TOKENS_PUBLIC_KEY_PATH])
+
+
+	@staticmethod
+	def get_lifetime():
+		cfg = RConfig.get()
+		return isodate.parse_duration(cfg[cfg.TOKENS_LIFETIME])
+
+
 # noinspection PyMethodMayBeStatic
 class RServer:
 
@@ -73,8 +91,8 @@ class RServer:
 
 	def start(self):
 		cfg = RConfig.get()
-		private_key = core.auth.jwt.read_private_key(cfg[cfg.TOKENS_PRIVATE_KEY_PATH])
-		public_key = core.auth.jwt.read_public_key(cfg[cfg.TOKENS_PUBLIC_KEY_PATH])
+		private_key = RTokens.get_private_key()
+		public_key = RTokens.get_public_key()
 		tokens_lifetime = isodate.parse_duration(cfg[cfg.TOKENS_LIFETIME])
 		strict_requests = cfg[cfg.APP_STRICT_REQUESTS]
 		# Core
