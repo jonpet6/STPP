@@ -7,17 +7,17 @@ def generate_login():
 
 
 class TestUsers(unittest.TestCase):
-	mockUser = None
+	model = None
 
 	def setUp(self) -> None:
 		from test.tests.models import setup
-		self.mockUser = setup.m_users
+		self.model = setup.m_users
 
 	def test_create(self):
 		login = generate_login()
-		self.mockUser.create(0, login, "test", "passhash")
-		user_id = self.mockUser.get_by_login(login).id
+		self.model.create(0, login, "test", "passhash")
+		user_id = self.model.get_by_login(login).id
 		try:
-			self.assertIsNotNone(self.mockUser.get(user_id))
+			self.assertIsNotNone(self.model.get(user_id))
 		finally:
-			self.mockUser.delete(user_id)
+			self.model.delete(user_id)
