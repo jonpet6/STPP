@@ -42,19 +42,6 @@ class Rooms:
 		with self._database.scope as scope:
 			return scope.query(orm.Rooms).filter(orm.Rooms.id == room_id).one()
 
-	def get_by_user_id(self, user_id: int) -> orm.Rooms:
-		"""
-		Raises
-		-------
-		sqlalchemy.orm.exc.NoResultFound
-			User with login doesn't exist
-		sqlalchemy.orm.exc.MultipleResultsFound
-			login is not unique in Users
-		sqlalchemy.exc.SQLAlchemyError
-		"""
-		with self._database.scope as scope:
-			return scope.query(orm.Rooms).filter(orm.Rooms.user_id == user_id).first()
-
 	def get_all(self, exclude_banned: bool, exclude_public: bool, exclude_private: bool, user_id: int = None, user_id_filter: int = None) -> typing.List[orm.Rooms]:
 		"""
 		Raises

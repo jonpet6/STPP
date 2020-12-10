@@ -34,19 +34,6 @@ class Posts:
 		with self._database.scope as scope:
 			return scope.query(orm.Posts).filter(orm.Posts.id == post_id).one()
 
-	def get_by_user_room_id(self, user_id: int, room_id: int) -> orm.Posts:
-		"""
-		Raises
-		-------
-		sqlalchemy.orm.exc.NoResultFound
-			Post with post_id doesn't exist
-		sqlalchemy.orm.exc.MultipleResultsFound
-			post_id is not unique in Posts
-		sqlalchemy.exc.SQLAlchemyError
-		"""
-		with self._database.scope as scope:
-			return scope.query(orm.Posts).filter(orm.Posts.user_id == user_id and orm.Posts.room_id == room_id).one()
-
 	def get_all(
 			self, exclude_banned_rooms: bool, exclude_public_rooms: bool, exclude_private_rooms: bool,
 			user_id: int = None, room_id_filter: int = None, user_id_filter: int = None
