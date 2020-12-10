@@ -34,6 +34,8 @@ import services.users
 from core.config import Config
 
 SERVER_ADDRESS = "http://127.0.0.1:4200"
+PRIVATE_INVALID_KEY_PATH = "./private_invalid.key"
+PUBLIC_INVALID_KEY_PATH = "./public_invalid.pem"
 
 
 def chdir():
@@ -77,12 +79,18 @@ class RTokens:
 		cfg = RConfig.get()
 		return core.auth.jwt.read_public_key(cfg[cfg.TOKENS_PUBLIC_KEY_PATH])
 
-
 	@staticmethod
 	def get_lifetime():
 		cfg = RConfig.get()
 		return isodate.parse_duration(cfg[cfg.TOKENS_LIFETIME])
 
+	@staticmethod
+	def get_private_invalid_key():
+		return core.auth.jwt.read_private_key(PRIVATE_INVALID_KEY_PATH)
+
+	@staticmethod
+	def get_public_invalid_key():
+		return core.auth.jwt.read_public_key(PUBLIC_INVALID_KEY_PATH)
 
 # noinspection PyMethodMayBeStatic
 class RServer:

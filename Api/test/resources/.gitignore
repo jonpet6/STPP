@@ -1,3 +1,5 @@
 dbpass
 private.key
 public.pem
+private_invalid.key
+public_invalid.pem
