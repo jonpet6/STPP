@@ -68,6 +68,7 @@ class RDatabase:
 
 # noinspection PyMethodMayBeStatic
 class RServer:
+
 	_app_thread: threading.Thread
 
 	def start(self):
@@ -109,9 +110,9 @@ class RServer:
 		# Set up routes
 		app.register_blueprint(routes.routes.init(s_request, c_login, c_users, c_users_bans, c_rooms, c_rooms_bans, c_rooms_users, c_posts))
 		# Start the app
-
-		self._app_thread = threading.Thread(target=app.run, kwargs={"port": cfg[cfg.APP_PORT], "debug": cfg[cfg.APP_DEBUG], "threaded": False})
-		self._app_thread.start()
+		# self._app_thread = threading.Thread(target=app.run, kwargs={"port": cfg[cfg.APP_PORT], "debug": cfg[cfg.APP_DEBUG], "threaded": False})
+		# self._app_thread.start()
+		app.run(port=cfg[cfg.APP_PORT], debug=cfg[cfg.APP_DEBUG], threaded=False)
 
 	def stop(self):
 		# can't, apparently
@@ -139,3 +140,7 @@ class RUsers:
 	@staticmethod
 	def get_user_id(user_creds: dict) -> int:
 		return RUsers.get_user_id_from_token(RUsers.get_token(user_creds))
+
+
+if __name__ == "__main__":
+	RServer().start()

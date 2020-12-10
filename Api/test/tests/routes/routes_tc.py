@@ -8,8 +8,11 @@ class RoutesTC(unittest.TestCase):
 	server_address = SERVER_ADDRESS
 
 	def setUp(self) -> None:
-		self._rserver = RServer()
-		self._rserver.start()
+		# start the server yourself
+		# self._rserver = RServer()
+		# self._rserver.start()
+		pass
 
 	def tearDown(self) -> None:
-		self._rserver.stop()
+		# self._rserver.stop()
+		pass
