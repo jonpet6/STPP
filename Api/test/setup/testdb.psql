@@ -51,15 +51,17 @@ CREATE TABLE posts (
 );
 
 INSERT INTO users(date_created, role, login, name, passhash)
-VALUES	('2020-12-08 15:25:46.501056+02', 1, 'testuser', 'TestUser', '$argon2id$v=19$m=102400,t=2,p=8$qV9bdvKsVxJejUK10n1wIA$G+vj8g9QtOt22rho8uFbNw');
+VALUES	('2020-12-08 15:25:00.000000+02', 1, 'testuser', 'TestUser', '$argon2id$v=19$m=102400,t=2,p=8$qV9bdvKsVxJejUK10n1wIA$G+vj8g9QtOt22rho8uFbNw');
 INSERT INTO users(date_created, role, login, name, passhash)
-VALUES	('2020-12-08 15:26:02.231976+02', 2, 'testadmin', 'TestAdmin', '$argon2id$v=19$m=102400,t=2,p=8$w2uayiE98FsiSTqyp8AtBA$iyy8RW2skes9vmQLvsOCbA');
+VALUES	('2020-12-08 15:26:00.000000+02', 1, 'testuser2', 'TestUser2', '$argon2id$v=19$m=102400,t=2,p=8$NIn3gJluELjlR1S5nUDrrg$7S4lweZ1Qapvba6tTpvvwA');
+INSERT INTO users(date_created, role, login, name, passhash)
+VALUES	('2020-12-08 15:27:02.000000+02', 2, 'testadmin', 'TestAdmin', '$argon2id$v=19$m=102400,t=2,p=8$w2uayiE98FsiSTqyp8AtBA$iyy8RW2skes9vmQLvsOCbA');
 
 INSERT INTO rooms(user_id, date_created, is_public, title)
-VALUES	(1, '2020-12-08 15:32:17.289619+02', true, 'TestRoomPublic'),
-		(1, '2020-12-08 15:32:22.288846+02', false, 'TestRoomPrivate');
+VALUES	(1, '2020-12-08 15:32:00.000000+02', true, 'TestRoomPublic'),
+		(1, '2020-12-08 15:33:00.000000+02', false, 'TestRoomPrivate'),
+		(2, '2020-12-08 15:33:00.000000+02', false, 'TestUser2RoomPrivate');
 
 INSERT INTO posts(date_created, date_updated, room_id, user_id, content)
 VALUES	('2020-12-08 15:32:34.075792+02', '2020-12-08 15:32:34.075792+02', 1, 1, 'test post in public test room'),
 		('2020-12-08 15:32:42.285819+02', '2020-12-08 15:32:42.285819+02', 2, 1, 'test post in private test room');
-

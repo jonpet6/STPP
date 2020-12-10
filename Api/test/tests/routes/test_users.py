@@ -4,7 +4,7 @@ from http import HTTPStatus
 import requests
 from requests import Response
 
-from test.resources import credentials
+from test.resources import dbdata
 from test.resources.common import RUsers
 from test.tests.routes.routes_tc import RoutesTC
 
@@ -20,9 +20,9 @@ class TestUsers(RoutesTC):
 		self.assertEqual(HTTPStatus.OK, users.status_code)
 
 	def test_get_by_id(self):
-		user: Response = requests.get(self._path_id(credentials.testUserID))
+		user: Response = requests.get(self._path_id(dbdata.testUser.id))
 		self.assertEqual(HTTPStatus.OK, user.status_code)
-		self.assertEqual(credentials.testUserName, user.json()["name"])
+		self.assertEqual(dbdata.testUser.name, user.json()["name"])
 
 	def test_get_by_non_existent_id(self):
 		user: Response = requests.get(self.PATH+"/"+"99999999")
