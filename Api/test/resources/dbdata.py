@@ -25,11 +25,10 @@ class DBUser:
 		return self._token
 
 
-
 # This should be synced with /test/setup/testdb.psql
 testUser = DBUser(1, "TestUser", "testuser", "testuserpass", {1, 2})
 
-testUser2 = DBUser(2, "TestUser2", "testuser", "testuser2pass", {3})
+testUser2 = DBUser(2, "TestUser2", "testuser2", "testuser2pass", {3})
 
 testAdmin = DBUser(3, "TestAdmin", "testadmin", "testadminpass", {})
 

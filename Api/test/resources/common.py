@@ -161,6 +161,7 @@ class RUsers:
 	@staticmethod
 	def get_token(user_creds: dict) -> str:
 		response: requests.Response = requests.post(SERVER_ADDRESS+"/login", json=user_creds)
+		if response.status_code != HTTPStatus.OK: print(response.json()["errors"])
 		assert(response.status_code == HTTPStatus.OK)
 		response_dict = json.loads(response.content)
 		return response_dict["token"]
