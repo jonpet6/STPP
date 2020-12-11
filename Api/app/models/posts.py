@@ -80,8 +80,8 @@ class Posts:
 				)
 
 			# TODO?
-			visible_ids = [idk[0] for idk in q_visible_ids.all()]
-			filtered_ids = [idk[0] for idk in q_filtered_ids.all()]
+			visible_ids = [idk[0] for idk in q_visible_ids]
+			filtered_ids = [idk[0] for idk in q_filtered_ids]
 
 			query = scope.query(orm.Posts).filter(
 				or_(

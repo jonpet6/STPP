@@ -8,7 +8,7 @@
 </template>
 
 <script>
-	import LRCard from "@/components/utils/LRCard";
+	import LRCard from "@/components/utils/LRCard"
 
 	export default {
 		name: "Room",
